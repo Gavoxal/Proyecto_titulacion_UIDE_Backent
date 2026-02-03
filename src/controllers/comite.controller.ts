@@ -45,15 +45,13 @@ export const agendarDefensa = async (request: FastifyRequest, reply: FastifyRepl
     const { propuestaId } = request.params as any;
     const { fechaDefensa } = request.body as any;
 
-    // La fecha de defensa es para toda la propuesta, pero está en la tabla de relación Comite.
-    // Vamos a actualizarla para todos los miembros del comité de esa propuesta.
-
     try {
-        await prisma.comite.updateMany({
-            where: { propuestasId: Number(propuestaId) },
+        // Ahora la fecha de defensa está en la Propuesta
+        await prisma.propuesta.update({
+            where: { id: Number(propuestaId) },
             data: { fechaDefensa: new Date(fechaDefensa) }
         });
-        return reply.send({ message: 'Fecha de defensa actualizada para el tribunal' });
+        return reply.send({ message: 'Fecha de defensa actualizada exitosamente' });
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error agendando defensa' });
@@ -63,12 +61,11 @@ export const agendarDefensa = async (request: FastifyRequest, reply: FastifyRepl
 export const calificarDefensa = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { propuestaId } = request.params as any;
-    const { calificacion, resultado } = request.body as any;
+    const { calificacion } = request.body as any;
     const usuario = request.user as any;
 
     try {
         // Un jurado califica SU asignacion
-        // findFirst porque la PK es compuesta y no la tengo en params (tengo propuestaId y usuario logueado)
         const asignacion = await prisma.comite.findFirst({
             where: {
                 propuestasId: Number(propuestaId),
@@ -88,8 +85,8 @@ export const calificarDefensa = async (request: FastifyRequest, reply: FastifyRe
                 }
             },
             data: {
-                calificacion: Number(calificacion),
-                resultadoDefensa: resultado // APROBADO, REPROBADO
+                calificacion: Number(calificacion)
+                // Resultado final se gestiona en Propuesta
             }
         });
 

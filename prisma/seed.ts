@@ -10,7 +10,7 @@ async function main() {
     const saltRounds = 10;
     const password = await bcrypt.hash('admin123', saltRounds);
 
-    const admin = await prisma.usuario.upsert({
+    const adminUser = await prisma.usuario.upsert({
         where: { correoInstitucional: 'director@uide.edu.ec' },
         update: {},
         create: {
@@ -18,12 +18,21 @@ async function main() {
             nombres: 'Admin',
             apellidos: 'Director',
             correoInstitucional: 'director@uide.edu.ec',
-            clave: password,
             rol: 'DIRECTOR'
         },
     });
 
-    console.log('✅ Usuario ADMIN creado:', admin.correoInstitucional);
+    await prisma.auth.upsert({
+        where: { usuarioId: adminUser.id },
+        update: { password: password },
+        create: {
+            username: 'director@uide.edu.ec',
+            password: password,
+            usuarioId: adminUser.id
+        }
+    });
+
+    console.log('✅ Usuario ADMIN creado:', adminUser.correoInstitucional);
     console.log('🔑 Credenciales: director@uide.edu.ec / admin123');
 
 }

@@ -49,22 +49,36 @@ export const getUsuarioById = async (request: FastifyRequest, reply: FastifyRepl
 };
 
 export const createUsuario = async (request: FastifyRequest, reply: FastifyReply) => {
+    // @ts-ignore
     const prisma = request.server.prisma;
     const { cedula, nombres, apellidos, correo, clave, rol } = request.body as any;
 
     try {
         const hashedPassword = await bcrypt.hash(clave, 10);
-        const nuevoUsuario = await prisma.usuario.create({
-            data: {
-                cedula,
-                nombres,
-                apellidos,
-                correoInstitucional: correo,
-                clave: hashedPassword,
-                rol: rol || 'ESTUDIANTE'
-            }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const nuevoUsuario = await tx.usuario.create({
+                data: {
+                    cedula,
+                    nombres,
+                    apellidos,
+                    correoInstitucional: correo,
+                    rol: rol || 'ESTUDIANTE'
+                }
+            });
+
+            await tx.auth.create({
+                data: {
+                    username: correo,
+                    password: hashedPassword,
+                    usuarioId: nuevoUsuario.id
+                }
+            });
+
+            return nuevoUsuario;
         });
-        return reply.code(201).send(nuevoUsuario);
+
+        return reply.code(201).send(result);
     } catch (error) {
         request.log.error(error);
         if ((error as any).code === 'P2002') {
@@ -75,22 +89,36 @@ export const createUsuario = async (request: FastifyRequest, reply: FastifyReply
 };
 
 export const updateUsuario = async (request: FastifyRequest, reply: FastifyReply) => {
+    // @ts-ignore
     const prisma = request.server.prisma;
     const { id } = request.params as any;
     const data = request.body as any;
 
     try {
-        if (data.clave) {
-            data.clave = await bcrypt.hash(data.clave, 10);
-        }
+        // Separar clave del resto de datos
+        const { clave, ...usuarioData } = data;
 
-        const usuarioActualizado = await prisma.usuario.update({
-            where: { id: Number(id) },
-            data: {
-                ...data,
-                updatedAt: new Date()
+        await prisma.$transaction(async (tx) => {
+            // Actualizar usuario
+            await tx.usuario.update({
+                where: { id: Number(id) },
+                data: {
+                    ...usuarioData,
+                    updatedAt: new Date()
+                }
+            });
+
+            // Si hay clave, actualizar Auth
+            if (clave) {
+                const hashedPassword = await bcrypt.hash(clave, 10);
+                await tx.auth.update({
+                    where: { usuarioId: Number(id) },
+                    data: { password: hashedPassword }
+                });
             }
         });
+
+        const usuarioActualizado = await prisma.usuario.findUnique({ where: { id: Number(id) } });
         return usuarioActualizado;
     } catch (error) {
         request.log.error(error);

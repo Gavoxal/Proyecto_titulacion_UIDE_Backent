@@ -34,6 +34,9 @@ export const getPropuestas = async (request: FastifyRequest, reply: FastifyReply
         // Si es estudiante, solo ver sus propuestas
         if (usuario.rol === 'ESTUDIANTE') {
             where = { fkEstudiante: usuario.id };
+        } else if (usuario.rol === 'TUTOR') {
+            // Si es tutor, ver propuestas asignadas
+            where = { tutorId: usuario.id };
         }
 
         const propuestas = await prisma.propuesta.findMany({
@@ -41,6 +44,9 @@ export const getPropuestas = async (request: FastifyRequest, reply: FastifyReply
             include: {
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
+                },
+                tutor: {
+                    select: { nombres: true, apellidos: true }
                 }
             }
         });
@@ -61,6 +67,9 @@ export const getPropuestaById = async (request: FastifyRequest, reply: FastifyRe
             include: {
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
+                },
+                tutor: {
+                    select: { nombres: true, apellidos: true }
                 }
             }
         });
@@ -82,6 +91,7 @@ export const updatePropuesta = async (request: FastifyRequest, reply: FastifyRep
     // Remover campos sensibles si los hubiera. Estado se actualiza en ruta especial.
     delete data.estado;
     delete data.fkEstudiante;
+    // Permitir update de tutorId, fechaDefensa, resultadoDefensa, etc.
 
     try {
         const propuestaActualizada = await prisma.propuesta.update({

@@ -14,12 +14,13 @@ model Usuario {
   nombres             String    @db.VarChar(191)
   apellidos           String    @db.VarChar(191)
   correoInstitucional String    @unique @map("correo_institucional") @db.VarChar(191)
-  clave               String    @db.VarChar(191)
   rol                 Rol       @default(ESTUDIANTE)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  propuestas          Propuesta[]
+
+  propuestas          Propuesta[] @relation("EstudiantePropuesta")
+  propuestasTutoradas Propuesta[] @relation("TutorPropuesta")
 
 
   
@@ -35,7 +36,20 @@ model Usuario {
   comiteAsignaciones  Comite[]
   prerequisitos       Prerequisito[]
 
+  estudiantePerfil    Estudiante?
+  auth                Auth?
+
   @@map("usuarios")
+}
+
+model Auth {
+  id        Int     @id @default(autoincrement())
+  username  String  @unique @db.VarChar(191)
+  password  String  @db.VarChar(191)
+  usuarioId Int     @unique @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("auth")
 }
 
 enum Rol {
@@ -45,6 +59,7 @@ enum Rol {
   COORDINADOR
   COMITE
   DOCENTE_INTEGRACION
+  //Revisor
 }
 
 // 2. Propuestas
@@ -53,15 +68,18 @@ model Propuesta {
   titulo              String    @db.VarChar(191)
   objetivos           String    @db.Text
   problematica        String?   @db.Text
-  areaInvestigacion   AreaInvestigacion @map("area_investigacion")
+  areaConocimiento    AreaConocimiento @map("area_conocimiento")
   alcance             String?   @db.VarChar(191)
   archivoUrl          String?   @map("archivo_url") @db.VarChar(191)
   fechaPublicacion    DateTime  @default(now()) @map("fecha_publicacion")
   estado              EstadoPropuesta @default(PENDIENTE)
   fkEstudiante        Int       @map("fk_estudiante")
-  aprobado            Int?      @db.TinyInt // TINYINT en SQL
+  tutorId             Int?      @map("tutor_id")
+  fechaDefensa        DateTime? @map("fecha_defensa")
+  resultadoDefensa    ResultadoDefensa? @default(PENDIENTE) @map("resultado_defensa")
   
-  estudiante          Usuario   @relation(fields: [fkEstudiante], references: [id])
+  estudiante          Usuario   @relation("EstudiantePropuesta", fields: [fkEstudiante], references: [id])
+  tutor               Usuario?  @relation("TutorPropuesta", fields: [tutorId], references: [id])
   actividades         Actividad[]
   comiteAsignaciones  Comite[]
   entregablesFinales  EntregableFinal[]
@@ -69,11 +87,12 @@ model Propuesta {
   @@map("propuestas")
 }
 
-enum AreaInvestigacion {
-  INTELIGENCIA_ARTIFICIAL
-  CIBERSEGURIDAD
-  DESARROLLO_SOFTWARE
-  CONTROL_CALIDAD
+enum AreaConocimiento {
+  CIENCIA_DE_DATOS_E_INTELIGENCIA_ARTIFICIAL
+  GESTION_DE_LA_INFORMACION_Y_TRANSFORMACION_DIGITAL
+  INFRAESTRUCTURA_TI_Y_CIBERSEGURIDAD
+  INNOVACION_EMPRENDIMIENTO_Y_ETICA_TECNOLOGICA
+  PROGRAMACION_Y_DESARROLLO_DE_SOFTWARE
 }
 
 enum EstadoPropuesta {
@@ -120,10 +139,9 @@ enum EstadoEvidencia {
   NO_ENTREGADO
 }
 
-// 5. Comentarios
 model Comentario {
   idComentarios       Int       @id @default(autoincrement())
-  descripcion         String?   @map("descripsion") @db.VarChar(45) // Typo en SQL original 'descripsion' mantenido o corregido? Corrijamos a descripcion si posible, pero map 'descripsion'.
+  descripcion         String?   @db.VarChar(45)
   evidenciaId         Int       @map("Evidencia_id")
   usuariosId          Int       @map("usuarios_id")
 
@@ -187,8 +205,6 @@ model Comite {
   rol            RolComite
   calificacion   Decimal? @db.Decimal(4,2)
   fechaAsignada  DateTime? @db.Date @map("fecha_asignada")
-  fechaDefensa   DateTime? @map("fecha_defensa")
-  resultadoDefensa ResultadoDefensa? @default(PENDIENTE) @map("resultado_defensa")
 
   usuario        Usuario   @relation(fields: [usuariosId], references: [id])
   propuesta      Propuesta @relation(fields: [propuestasId], references: [id])
@@ -209,4 +225,23 @@ enum ResultadoDefensa {
   PENDIENTE
 }
 
-// Dummy model to ignore errors on EvidenciaReview if needed, removed.
+
+// 10. Estudiante Perfil (Nuevo)
+model Estudiante {
+  id              Int     @id @default(autoincrement())
+  sexo            String? @db.VarChar(20)
+  estadoEscuela   String? @map("estado_escuela") @db.VarChar(50)
+  sede            String? @db.VarChar(100)
+  escuela         String? @db.VarChar(100)
+  codigoMalla     String? @map("codigo_malla") @db.VarChar(50)
+  malla           String? @db.VarChar(100)
+  periodoLectivo  String? @map("periodo_lectivo") @db.VarChar(100)
+  ciudad          String? @db.VarChar(100)
+  provincia       String? @db.VarChar(100)
+  pais            String? @db.VarChar(100)
+  
+  usuarioId       Int     @unique @map("usuario_id")
+  usuario         Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("estudiantes_perfil")
+}

@@ -6,17 +6,20 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
 
     try {
-        // 1. Buscar usuario
-        const usuario = await prisma.usuario.findUnique({
-            where: { correoInstitucional: correo }
+        // 1. Buscar credenciales en Auth
+        const auth = await prisma.auth.findUnique({
+            where: { username: correo },
+            include: { usuario: true }
         });
 
-        if (!usuario) {
+        if (!auth || !auth.usuario) {
             return reply.code(401).send({ message: 'Credenciales inválidas' });
         }
 
+        const usuario = auth.usuario;
+
         // 2. Verificar password
-        const valid = await bcrypt.compare(clave, usuario.clave);
+        const valid = await bcrypt.compare(clave, auth.password);
         if (!valid) {
             return reply.code(401).send({ message: 'Credenciales inválidas' });
         }

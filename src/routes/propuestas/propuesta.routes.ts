@@ -77,7 +77,13 @@ export default async function (fastify: FastifyInstance, opts: any) {
                     archivoUrl: { type: 'string' },
                     areaInvestigacion: {
                         type: 'string',
-                        enum: ['INTELIGENCIA_ARTIFICIAL', 'CIBERSEGURIDAD', 'DESARROLLO_SOFTWARE', 'CONTROL_CALIDAD']
+                        enum: [
+                            'CIENCIA_DE_DATOS_E_INTELIGENCIA_ARTIFICIAL',
+                            'GESTION_DE_LA_INFORMACION_Y_TRANSFORMACION_DIGITAL',
+                            'INFRAESTRUCTURA_TI_Y_CIBERSEGURIDAD',
+                            'INNOVACION_EMPRENDIMIENTO_Y_ETICA_TECNOLOGICA',
+                            'PROGRAMACION_Y_DESARROLLO_DE_SOFTWARE'
+                        ]
                     }
                 }
             }
@@ -106,8 +112,10 @@ export default async function (fastify: FastifyInstance, opts: any) {
                     titulo: { type: 'string' },
                     objetivos: { type: 'string' },
                     problematica: { type: 'string' },
+
                     alcance: { type: 'string' },
-                    archivoUrl: { type: 'string' }
+                    archivoUrl: { type: 'string' },
+                    tutorId: { type: 'integer' }
                 }
             }
         },

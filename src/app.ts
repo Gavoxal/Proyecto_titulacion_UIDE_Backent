@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
+import multipart from '@fastify/multipart';
 import { PrismaClient } from '@prisma/client';
 
 dotenv.config();
@@ -21,6 +22,7 @@ const app = Fastify({
 
 // Plugins
 await app.register(cors);
+await app.register(multipart);
 
 // Swagger
 // Swagger
@@ -78,8 +80,11 @@ await app.register((await import('./routes/comentarios/comentario.routes.js')).d
 await app.register((await import('./routes/prerequisitos/prerequisito.routes.js')).default, { prefix: '/api/v1/prerequisitos' });
 // @ts-ignore
 await app.register((await import('./routes/entregables/entregable.routes.js')).default, { prefix: '/api/v1/entregables' });
+
 // @ts-ignore
 await app.register((await import('./routes/comite/comite.routes.js')).default, { prefix: '/api/v1/comite' });
+// @ts-ignore
+await app.register((await import('./routes/estudiantes/estudiante.routes.js')).default, { prefix: '/api/v1/estudiantes' });
 
 
 
