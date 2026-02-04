@@ -6,6 +6,21 @@ export const createPropuesta = async (request: FastifyRequest, reply: FastifyRep
     const usuario = request.user as any; // From JWT
 
     try {
+        // 1. Validar Prerrequisitos (Inglés, Prácticas, Vinculación)
+        const requisitosCumplidos = await prisma.prerequisito.count({
+            where: {
+                fkEstudiante: usuario.id,
+                cumplido: true
+            }
+        });
+
+        // Asumimos que son 3 requisitos obligatorios
+        if (requisitosCumplidos < 3) {
+            return reply.code(403).send({
+                message: 'No puedes crear una propuesta hasta que la Dirección valide tus 3 prerrequisitos (Inglés, Prácticas, Vinculación).'
+            });
+        }
+
         const nuevaPropuesta = await prisma.propuesta.create({
             data: {
                 titulo,

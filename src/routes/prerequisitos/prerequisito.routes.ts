@@ -2,7 +2,8 @@ import {
     createPrerequisito,
     getPrerequisitos,
     validatePrerequisito,
-    deletePrerequisito
+    deletePrerequisito,
+    getPrerequisitosDashboard
 } from '../../controllers/prerequisito.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -50,6 +51,21 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, createPrerequisito);
+
+    // GET /dashboard (Dashboard de Cumplimiento)
+    fastify.get('/dashboard', {
+        schema: {
+            tags: ['Prerrequisitos'],
+            description: 'Obtener dashboard de cumplimiento de estudiantes',
+            security: [{ bearerAuth: [] }]
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            if (!['DIRECTOR', 'COORDINADOR'].includes(user.rol)) {
+                return reply.code(403).send({ message: 'Acceso denegado' });
+            }
+        }
+    }, getPrerequisitosDashboard);
 
     // GET / (Listar)
     fastify.get('/', {

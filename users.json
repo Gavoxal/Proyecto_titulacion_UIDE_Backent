@@ -1,0 +1,51 @@
+[
+  {
+    "id": 1,
+    "nombres": "Juan",
+    "apellidos": "Director",
+    "correo_institucional": "gasarangozu@uide.edu.ec",
+    "rol": "DIRECTOR"
+  },
+  {
+    "id": 2,
+    "nombres": "Dario",
+    "apellidos": "Coordinador",
+    "correo_institucional": "coord@uide.edu.ec",
+    "rol": "COORDINADOR"
+  },
+  {
+    "id": 3,
+    "nombres": "Maria",
+    "apellidos": "Integracion",
+    "correo_institucional": "docente@uide.edu.ec",
+    "rol": "DOCENTE_INTEGRACION"
+  },
+  {
+    "id": 4,
+    "nombres": "Pedro",
+    "apellidos": "Tutor",
+    "correo_institucional": "tutor@uide.edu.ec",
+    "rol": "TUTOR"
+  },
+  {
+    "id": 5,
+    "nombres": "Carlos",
+    "apellidos": "Avanzado",
+    "correo_institucional": "est1@uide.edu.ec",
+    "rol": "ESTUDIANTE"
+  },
+  {
+    "id": 6,
+    "nombres": "Ana",
+    "apellidos": "Nueva",
+    "correo_institucional": "est2@uide.edu.ec",
+    "rol": "ESTUDIANTE"
+  },
+  {
+    "id": 7,
+    "nombres": "Gabriel",
+    "apellidos": "Sarango",
+    "correo_institucional": "gavo3212@gmail.com",
+    "rol": "COORDINADOR"
+  }
+]

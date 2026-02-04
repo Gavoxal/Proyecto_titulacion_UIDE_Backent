@@ -23,6 +23,7 @@ export default async function (fastify: FastifyInstance, opts: any) {
             idActividades: { type: 'integer' },
             nombre: { type: 'string' },
             descripcion: { type: 'string' },
+            tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] },
             evidencias: { type: 'array', items: { type: 'object', additionalProperties: true } }
         }
     };
@@ -52,7 +53,8 @@ export default async function (fastify: FastifyInstance, opts: any) {
                 properties: {
                     nombre: { type: 'string' },
                     descripcion: { type: 'string' },
-                    propuestasId: { type: 'integer' }
+                    propuestasId: { type: 'integer' },
+                    tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] }
                 }
             }
         },
@@ -73,6 +75,12 @@ export default async function (fastify: FastifyInstance, opts: any) {
             params: {
                 type: 'object',
                 properties: { propuestaId: { type: 'integer' } }
+            },
+            querystring: {
+                type: 'object',
+                properties: {
+                    tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] }
+                }
             },
             response: {
                 200: {

@@ -51,18 +51,62 @@ async function setupRLS() {
         // ============================================================
         // En lugar de que la IA consulte la tabla 'usuarios' directamente,
         // consultará esta vista 'v_usuarios_rls'.
+        // Función para leer ID de usuario actual
+        await connection.query(`DROP FUNCTION IF EXISTS get_app_user_id;`);
+        await connection.query(`
+            CREATE FUNCTION get_app_user_id() RETURNS INT
+            DETERMINISTIC 
+            READS SQL DATA
+            BEGIN
+                RETURN @app_current_user_id;
+            END;
+        `);
+
+        // ============================================================
+        // PASO 3: Crear VISTAS SEGURAS (RLS)
+        // ============================================================
+
+        // 3.1 Vista Usuarios
         console.log(' Creando Vista Segura v_usuarios_rls...');
-
         await connection.query(`DROP VIEW IF EXISTS v_usuarios_rls;`);
-
-        // AQUÍ ESTÁ LA LÓGICA DE SEGURIDAD:
-        // "Solo devuelve filas SI el rol devuelto por la función es 'DIRECTOR'"
         await connection.query(`
             CREATE VIEW v_usuarios_rls AS
             SELECT *
             FROM usuarios
             WHERE 
-                get_app_role() = 'DIRECTOR';
+                get_app_role() IN ('DIRECTOR', 'COORDINADOR', 'DOCENTE_INTEGRACION')
+                OR id = get_app_user_id();
+        `);
+
+        // 3.2 Vista Propuestas
+        console.log(' Creando Vista Segura v_propuestas_rls...');
+        await connection.query(`DROP VIEW IF EXISTS v_propuestas_rls;`);
+        await connection.query(`
+            CREATE VIEW v_propuestas_rls AS
+            SELECT p.*, 
+                   CONCAT(e.nombres, ' ', e.apellidos) as estudiante_nombre,
+                   CONCAT(t.nombres, ' ', t.apellidos) as tutor_nombre
+            FROM propuestas p
+            LEFT JOIN usuarios e ON p.fk_estudiante = e.id
+            LEFT JOIN usuarios t ON p.tutor_id = t.id
+            WHERE 
+                get_app_role() IN ('DIRECTOR', 'COORDINADOR', 'DOCENTE_INTEGRACION')
+                OR (get_app_role() = 'TUTOR' AND p.tutor_id = get_app_user_id())
+                OR (get_app_role() = 'ESTUDIANTE' AND p.fk_estudiante = get_app_user_id());
+        `);
+
+        // 3.3 Vista Actividades
+        console.log(' Creando Vista Segura v_actividades_rls...');
+        await connection.query(`DROP VIEW IF EXISTS v_actividades_rls;`);
+        await connection.query(`
+            CREATE VIEW v_actividades_rls AS
+            SELECT a.*
+            FROM Actividades a
+            INNER JOIN propuestas p ON a.propuestas_id = p.id
+            WHERE 
+                get_app_role() IN ('DIRECTOR', 'COORDINADOR', 'DOCENTE_INTEGRACION')
+                OR (get_app_role() = 'TUTOR' AND p.tutor_id = get_app_user_id())
+                OR (get_app_role() = 'ESTUDIANTE' AND p.fk_estudiante = get_app_user_id());
         `);
 
         // ============================================================
@@ -77,7 +121,16 @@ async function setupRLS() {
             GRANT SELECT ON \`db-proyecto-titulacion\`.v_usuarios_rls TO 'mcp_agent'@'%';
         `);
         await connection.query(`
+            GRANT SELECT ON \`db-proyecto-titulacion\`.v_propuestas_rls TO 'mcp_agent'@'%';
+        `);
+        await connection.query(`
+            GRANT SELECT ON \`db-proyecto-titulacion\`.v_actividades_rls TO 'mcp_agent'@'%';
+        `);
+        await connection.query(`
             GRANT EXECUTE ON FUNCTION \`db-proyecto-titulacion\`.get_app_role TO 'mcp_agent'@'%';
+        `);
+        await connection.query(`
+            GRANT EXECUTE ON FUNCTION \`db-proyecto-titulacion\`.get_app_user_id TO 'mcp_agent'@'%';
         `);
 
         await connection.query('FLUSH PRIVILEGES;'); // Aplicar cambios

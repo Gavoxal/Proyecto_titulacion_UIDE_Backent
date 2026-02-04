@@ -28,6 +28,12 @@ Además de las tablas, se programó lógica "inteligente" en la base de datos pa
 *   **Función `get_app_role()`:** Función determinística que lee la variable de sesión `@app_current_role`.
 *   **Regla:** `SELECT * FROM usuarios WHERE get_app_role() = 'DIRECTOR'`. Esto asegura que el agente MCP solo vea datos si ha autenticado su "intención" correctamente.
 
+### 5. Lógica de Negocio Crítica Implementada
+Se han añadido validaciones y flujos específicos solictados:
+*   **Prerrequisitos Bloqueantes:** El endpoint `POST /propuestas` ahora **bloquea** la creación si el estudiante no tiene validados sus 3 requisitos (Inglés, Prácticas, Vinculación).
+*   **Dashboard de Dirección:** Nuevo endpoint `GET /prerequisitos/dashboard` que devuelve la data pivoteada (Estado por columnas) lista para el Frontend.
+*   **Diferenciación Tutores vs Docentes:** Las actividades ahora tienen un campo `tipo` (`DOCENCIA` o `TUTORIA`) para separar las tareas de clase de la retroalimentación de tesis.
+
 ---
 
 ## 🚀 Últimas Actualizaciones

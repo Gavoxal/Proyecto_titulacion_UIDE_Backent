@@ -4,7 +4,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createActividad = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { nombre, descripcion, propuestasId } = request.body as any;
+    const { nombre, descripcion, propuestasId, tipo } = request.body as any;
     const usuario = request.user as any;
 
     try {
@@ -13,7 +13,9 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
                 nombre,
                 descripcion,
                 propuestasId: Number(propuestasId),
-                usuariosId: usuario.id
+                usuariosId: usuario.id,
+                // @ts-ignore
+                tipo: tipo || 'DOCENCIA' // Default to DOCENCIA
             }
         });
         return reply.code(201).send(nuevaActividad);
@@ -26,10 +28,16 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
 export const getActividadesByPropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { propuestaId } = request.params as any;
+    const { tipo } = request.query as any;
 
     try {
+        const where: any = { propuestasId: Number(propuestaId) };
+        if (tipo) {
+            where.tipo = tipo; // Filter by tipo if provided
+        }
+
         const actividades = await prisma.actividad.findMany({
-            where: { propuestasId: Number(propuestaId) },
+            where,
             include: {
                 evidencias: true
             }

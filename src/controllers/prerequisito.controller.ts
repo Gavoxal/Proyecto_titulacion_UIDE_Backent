@@ -81,3 +81,63 @@ export const deletePrerequisito = async (request: FastifyRequest, reply: Fastify
         return reply.code(500).send({ message: 'Error eliminando prerrequisito' });
     }
 };
+
+// Dashboard para el Director (Formato Frontend exacto)
+export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+
+    try {
+        // 1. Obtener todos los estudiantes y sus requisitos
+        const estudiantes = await prisma.usuario.findMany({
+            where: { rol: 'ESTUDIANTE' },
+            select: {
+                id: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                prerequisitos: {
+                    select: { nombre: true, cumplido: true, id: true, archivoUrl: true }
+                }
+            }
+        });
+
+        // 2. Transformar data para matchear Frontend: { english: {...}, internship: {...}, community: {...} }
+        const dataDashboard = estudiantes.map((e: any) => {
+            const reqs = e.prerequisitos || [];
+
+            // Helper para buscar status. Asumimos nombres estandarizados o "contains"
+            const getStatus = (keyword: string) => {
+                const found = reqs.find((r: any) => r.nombre.toLowerCase().includes(keyword));
+                return {
+                    completed: !!found, // Si subió archivo (existe registro)
+                    verified: found ? found.cumplido : false, // Si Director validó
+                    id: found ? found.id : null,
+                    file: found ? found.archivoUrl : null
+                };
+            };
+
+            const english = getStatus('ingle'); // ingles o inglés
+            const internship = getStatus('practica'); // practicas
+            const community = getStatus('vinculacion'); // vinculacion
+
+            // Access Granted solo si los 3 están verified: true
+            const accessGranted = english.verified && internship.verified && community.verified;
+
+            return {
+                id: e.id,
+                name: `${e.nombres} ${e.apellidos}`,
+                cedula: e.cedula,
+                cycle: 9, // Hardcoded o calcular si existiera tabla de escolaridad
+                english,
+                internship,
+                community,
+                accessGranted
+            };
+        });
+
+        return dataDashboard;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error generando dashboard de requisitos' });
+    }
+};
