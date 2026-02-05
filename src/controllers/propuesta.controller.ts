@@ -2,22 +2,25 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createPropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { titulo, objetivos, areaInvestigacion, archivoUrl, problematica, alcance } = request.body as any;
+    const { titulo, objetivos, areaConocimientoId, archivoUrl, problematica, alcance } = request.body as any;
     const usuario = request.user as any; // From JWT
 
     try {
-        // 1. Validar Prerrequisitos (Inglés, Prácticas, Vinculación)
-        const requisitosCumplidos = await prisma.prerequisito.count({
+        // 1. Validar Prerrequisitos - Usar nueva estructura
+        const totalRequisitos = await prisma.catalogoPrerequisito.count({
+            where: { activo: true }
+        });
+
+        const requisitosCumplidos = await prisma.estudiantePrerequisito.count({
             where: {
                 fkEstudiante: usuario.id,
                 cumplido: true
             }
         });
 
-        // Asumimos que son 3 requisitos obligatorios
-        if (requisitosCumplidos < 3) {
+        if (requisitosCumplidos < totalRequisitos) {
             return reply.code(403).send({
-                message: 'No puedes crear una propuesta hasta que la Dirección valide tus 3 prerrequisitos (Inglés, Prácticas, Vinculación).'
+                message: `No puedes crear una propuesta hasta que la Dirección valide todos tus prerrequisitos. Cumplidos: ${requisitosCumplidos}/${totalRequisitos}`
             });
         }
 
@@ -25,12 +28,15 @@ export const createPropuesta = async (request: FastifyRequest, reply: FastifyRep
             data: {
                 titulo,
                 objetivos,
-                areaInvestigacion,
+                areaConocimientoId: Number(areaConocimientoId),
                 archivoUrl,
                 problematica,
                 alcance,
                 fkEstudiante: usuario.id,
                 estado: 'PENDIENTE'
+            },
+            include: {
+                areaConocimiento: true
             }
         });
         return reply.code(201).send(nuevaPropuesta);
@@ -60,9 +66,7 @@ export const getPropuestas = async (request: FastifyRequest, reply: FastifyReply
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
                 },
-                tutor: {
-                    select: { nombres: true, apellidos: true }
-                }
+                areaConocimiento: true
             }
         });
         return propuestas;
@@ -83,9 +87,8 @@ export const getPropuestaById = async (request: FastifyRequest, reply: FastifyRe
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
                 },
-                tutor: {
-                    select: { nombres: true, apellidos: true }
-                }
+                areaConocimiento: true,
+                actividades: true
             }
         });
 

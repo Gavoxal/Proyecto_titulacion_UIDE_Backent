@@ -4,17 +4,14 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createActividad = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { nombre, descripcion, propuestasId, tipo } = request.body as any;
-    const usuario = request.user as any;
+    const { nombre, descripcion, propuestaId, tipo } = request.body as any;
 
     try {
         const nuevaActividad = await prisma.actividad.create({
             data: {
                 nombre,
                 descripcion,
-                propuestasId: Number(propuestasId),
-                usuariosId: usuario.id,
-                // @ts-ignore
+                propuestaId: Number(propuestaId),
                 tipo: tipo || 'DOCENCIA' // Default to DOCENCIA
             }
         });
@@ -31,7 +28,7 @@ export const getActividadesByPropuesta = async (request: FastifyRequest, reply: 
     const { tipo } = request.query as any;
 
     try {
-        const where: any = { propuestasId: Number(propuestaId) };
+        const where: any = { propuestaId: Number(propuestaId) };
         if (tipo) {
             where.tipo = tipo; // Filter by tipo if provided
         }
@@ -55,7 +52,7 @@ export const getActividadById = async (request: FastifyRequest, reply: FastifyRe
 
     try {
         const actividad = await prisma.actividad.findUnique({
-            where: { idActividades: Number(id) },
+            where: { id: Number(id) },
             include: { evidencias: true }
         });
 
@@ -76,7 +73,7 @@ export const updateActividad = async (request: FastifyRequest, reply: FastifyRep
 
     try {
         const actividadActualizada = await prisma.actividad.update({
-            where: { idActividades: Number(id) },
+            where: { id: Number(id) },
             data
         });
         return actividadActualizada;
@@ -92,7 +89,7 @@ export const deleteActividad = async (request: FastifyRequest, reply: FastifyRep
 
     try {
         await prisma.actividad.delete({
-            where: { idActividades: Number(id) }
+            where: { id: Number(id) }
         });
         return reply.code(204).send();
     } catch (error) {
@@ -115,7 +112,7 @@ export const createEvidencia = async (request: FastifyRequest, reply: FastifyRep
                 semana: Number(semana),
                 contenido,
                 archivoUrl,
-                actividadesId: Number(actividadId),
+                actividadId: Number(actividadId),
                 estado: 'ENTREGADO'
             }
         });
@@ -201,7 +198,7 @@ export const updateEvidenciaNota = async (request: FastifyRequest, reply: Fastif
                 data: {
                     descripcion: comentarios,
                     evidenciaId: Number(id),
-                    usuariosId: usuario.id
+                    usuarioId: usuario.id
                 }
             });
         }

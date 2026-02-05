@@ -10,7 +10,7 @@ export const createComentario = async (request: FastifyRequest, reply: FastifyRe
             data: {
                 descripcion,
                 evidenciaId: Number(evidenciaId),
-                usuariosId: usuario.id
+                usuarioId: usuario.id
             }
         });
         return reply.code(201).send(nuevoComentario);
@@ -46,19 +46,19 @@ export const deleteComentario = async (request: FastifyRequest, reply: FastifyRe
     const usuario = request.user as any;
 
     try {
-        const comentario = await prisma.comentario.findUnique({ where: { idComentarios: Number(id) } });
+        const comentario = await prisma.comentario.findUnique({ where: { id: Number(id) } });
 
         if (!comentario) {
             return reply.code(404).send({ message: 'Comentario no encontrado' });
         }
 
         // Solo el autor o un admin puede borrar
-        if (comentario.usuariosId !== usuario.id && !['DIRECTOR', 'COORDINADOR'].includes(usuario.rol)) {
+        if (comentario.usuarioId !== usuario.id && !['DIRECTOR', 'COORDINADOR'].includes(usuario.rol)) {
             return reply.code(403).send({ message: 'No tienes permiso para eliminar este comentario' });
         }
 
         await prisma.comentario.delete({
-            where: { idComentarios: Number(id) }
+            where: { id: Number(id) }
         });
         return reply.code(204).send();
     } catch (error) {

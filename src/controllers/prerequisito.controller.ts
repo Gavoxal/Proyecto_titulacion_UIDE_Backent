@@ -1,48 +1,115 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
-export const createPrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
+// ============================================
+// CRUD para Catálogo de Prerrequisitos (Admin)
+// ============================================
+
+export const getCatalogoPrerequisitos = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { nombre, descripcion, archivoUrl } = request.body as any;
+
+    try {
+        const catalogo = await prisma.catalogoPrerequisito.findMany({
+            where: { activo: true },
+            orderBy: { orden: 'asc' }
+        });
+        return catalogo;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error obteniendo catálogo de prerrequisitos' });
+    }
+};
+
+export const createCatalogoPrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { nombre, descripcion, orden } = request.body as any;
+
+    try {
+        const nuevoRequisito = await prisma.catalogoPrerequisito.create({
+            data: { nombre, descripcion, orden: orden || 1, activo: true }
+        });
+        return reply.code(201).send(nuevoRequisito);
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error creando prerrequisito en catálogo' });
+    }
+};
+
+// ============================================
+// CRUD para Cumplimiento de Prerrequisitos (Estudiantes)
+// ============================================
+
+export const createEstudiantePrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { prerequisitoId, archivoUrl } = request.body as any;
     const usuario = request.user as any;
 
     try {
-        const nuevoPrerequisito = await prisma.prerequisito.create({
-            data: {
-                nombre,
-                descripcion,
-                archivoUrl,
-                fkEstudiante: usuario.id,
-                cumplido: false
+        // Verificar si ya existe
+        const existente = await prisma.estudiantePrerequisito.findUnique({
+            where: {
+                fkEstudiante_prerequisitoId: {
+                    fkEstudiante: usuario.id,
+                    prerequisitoId: Number(prerequisitoId)
+                }
             }
         });
-        return reply.code(201).send(nuevoPrerequisito);
+
+        if (existente) {
+            // Actualizar si ya existe
+            const actualizado = await prisma.estudiantePrerequisito.update({
+                where: {
+                    fkEstudiante_prerequisitoId: {
+                        fkEstudiante: usuario.id,
+                        prerequisitoId: Number(prerequisitoId)
+                    }
+                },
+                data: {
+                    archivoUrl,
+                    cumplido: false // Reset a false hasta que director valide
+                }
+            });
+            return reply.code(200).send(actualizado);
+        } else {
+            // Crear nuevo
+            const nuevoPrerequisito = await prisma.estudiantePrerequisito.create({
+                data: {
+                    prerequisitoId: Number(prerequisitoId),
+                    fkEstudiante: usuario.id,
+                    archivoUrl,
+                    cumplido: false
+                }
+            });
+            return reply.code(201).send(nuevoPrerequisito);
+        }
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error subiendo prerrequisito' });
     }
 };
 
-export const getPrerequisitos = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getEstudiantePrerequisitos = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const usuario = request.user as any;
-    const { estudianteId } = request.query as any; // Allow filtering by student for admins
+    const { estudianteId } = request.query as any;
 
     try {
-        let where = {};
-        if (usuario.rol === 'ESTUDIANTE') {
-            where = { fkEstudiante: usuario.id };
-        } else if (estudianteId) {
-            where = { fkEstudiante: Number(estudianteId) };
+        let fkEstudiante = usuario.id;
+
+        // Si es director/coordinador, puede ver de cualquier estudiante
+        if ((usuario.rol === 'DIRECTOR' || usuario.rol === 'COORDINADOR') && estudianteId) {
+            fkEstudiante = Number(estudianteId);
         }
 
-        const prerequisitos = await prisma.prerequisito.findMany({
-            where,
+        const prerequisitos = await prisma.estudiantePrerequisito.findMany({
+            where: { fkEstudiante },
             include: {
+                prerequisito: true,
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
                 }
             }
         });
+
         return prerequisitos;
     } catch (error) {
         request.log.error(error);
@@ -53,12 +120,15 @@ export const getPrerequisitos = async (request: FastifyRequest, reply: FastifyRe
 export const validatePrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { id } = request.params as any;
-    const { cumplido } = request.body as any; // Boolean
+    const { cumplido } = request.body as any;
 
     try {
-        const prerequisitoActualizado = await prisma.prerequisito.update({
+        const prerequisitoActualizado = await prisma.estudiantePrerequisito.update({
             where: { id: Number(id) },
-            data: { cumplido: Boolean(cumplido) }
+            data: {
+                cumplido: Boolean(cumplido),
+                fechaCumplimiento: cumplido ? new Date() : null
+            }
         });
         return prerequisitoActualizado;
     } catch (error) {
@@ -67,12 +137,12 @@ export const validatePrerequisito = async (request: FastifyRequest, reply: Fasti
     }
 };
 
-export const deletePrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
+export const deleteEstudiantePrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { id } = request.params as any;
 
     try {
-        await prisma.prerequisito.delete({
+        await prisma.estudiantePrerequisito.delete({
             where: { id: Number(id) }
         });
         return reply.code(204).send();
@@ -82,12 +152,21 @@ export const deletePrerequisito = async (request: FastifyRequest, reply: Fastify
     }
 };
 
-// Dashboard para el Director (Formato Frontend exacto)
+// ============================================
+// Dashboard para Director/Coordinador
+// ============================================
+
 export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
 
     try {
-        // 1. Obtener todos los estudiantes y sus requisitos
+        // 1. Obtener catálogo de prerrequisitos
+        const catalogo = await prisma.catalogoPrerequisito.findMany({
+            where: { activo: true },
+            orderBy: { orden: 'asc' }
+        });
+
+        // 2. Obtener todos los estudiantes con sus cumplimientos
         const estudiantes = await prisma.usuario.findMany({
             where: { rol: 'ESTUDIANTE' },
             select: {
@@ -96,42 +175,41 @@ export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: 
                 apellidos: true,
                 cedula: true,
                 prerequisitos: {
-                    select: { nombre: true, cumplido: true, id: true, archivoUrl: true }
+                    include: {
+                        prerequisito: true
+                    }
                 }
             }
         });
 
-        // 2. Transformar data para matchear Frontend: { english: {...}, internship: {...}, community: {...} }
-        const dataDashboard = estudiantes.map((e: any) => {
-            const reqs = e.prerequisitos || [];
+        // 3. Transformar data para el dashboard
+        const dataDashboard = estudiantes.map((estudiante: any) => {
+            const cumplimientos = estudiante.prerequisitos || [];
 
-            // Helper para buscar status. Asumimos nombres estandarizados o "contains"
-            const getStatus = (keyword: string) => {
-                const found = reqs.find((r: any) => r.nombre.toLowerCase().includes(keyword));
+            // Mapear cada requisito del catálogo
+            const requisitos = catalogo.map(req => {
+                const cumplimiento = cumplimientos.find((c: any) => c.prerequisitoId === req.id);
                 return {
-                    completed: !!found, // Si subió archivo (existe registro)
-                    verified: found ? found.cumplido : false, // Si Director validó
-                    id: found ? found.id : null,
-                    file: found ? found.archivoUrl : null
+                    id: req.id,
+                    nombre: req.nombre,
+                    completed: !!cumplimiento, // Si existe registro
+                    verified: cumplimiento ? cumplimiento.cumplido : false, // Si está validado
+                    file: cumplimiento ? cumplimiento.archivoUrl : null,
+                    fechaCumplimiento: cumplimiento ? cumplimiento.fechaCumplimiento : null
                 };
-            };
+            });
 
-            const english = getStatus('ingle'); // ingles o inglés
-            const internship = getStatus('practica'); // practicas
-            const community = getStatus('vinculacion'); // vinculacion
-
-            // Access Granted solo si los 3 están verified: true
-            const accessGranted = english.verified && internship.verified && community.verified;
+            // Access granted solo si todos están verified
+            const accessGranted = requisitos.every(r => r.verified);
 
             return {
-                id: e.id,
-                name: `${e.nombres} ${e.apellidos}`,
-                cedula: e.cedula,
-                cycle: 9, // Hardcoded o calcular si existiera tabla de escolaridad
-                english,
-                internship,
-                community,
-                accessGranted
+                id: estudiante.id,
+                name: `${estudiante.nombres} ${estudiante.apellidos}`,
+                cedula: estudiante.cedula,
+                prerequisitos: requisitos,
+                accessGranted,
+                totalRequisitos: catalogo.length,
+                cumplidos: requisitos.filter(r => r.verified).length
             };
         });
 
@@ -139,5 +217,43 @@ export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: 
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error generando dashboard de requisitos' });
+    }
+};
+
+// ============================================
+// Verificar si estudiante puede crear propuesta
+// ============================================
+
+export const checkCanCreatePropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const usuario = request.user as any;
+
+    try {
+        // Contar prerrequisitos cumplidos
+        const cumplidos = await prisma.estudiantePrerequisito.count({
+            where: {
+                fkEstudiante: usuario.id,
+                cumplido: true
+            }
+        });
+
+        // Contar total de prerrequisitos activos
+        const totalRequisitos = await prisma.catalogoPrerequisito.count({
+            where: { activo: true }
+        });
+
+        const canCreate = cumplidos === totalRequisitos && totalRequisitos > 0;
+
+        return {
+            canCreate,
+            cumplidos,
+            totalRequisitos,
+            message: canCreate
+                ? 'Puedes crear tu propuesta'
+                : `Te faltan ${totalRequisitos - cumplidos} prerrequisito(s) por cumplir`
+        };
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error verificando prerrequisitos' });
     }
 };
