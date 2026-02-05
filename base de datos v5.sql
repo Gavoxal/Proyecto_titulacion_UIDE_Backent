@@ -152,6 +152,25 @@ COLLATE = utf8mb4_unicode_ci;
 
 
 -- -----------------------------------------------------
+-- Table `db_proyecto_titulacion`.`mcp_auth`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `db_proyecto_titulacion`.`mcp_auth` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `email` VARCHAR(191) NOT NULL,
+  `codigo` VARCHAR(6) NOT NULL,
+  `token` VARCHAR(64) NULL DEFAULT NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `expires_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `mcp_auth_email_idx` (`email` ASC) VISIBLE,
+  INDEX `mcp_auth_token_idx` (`token` ASC) VISIBLE
+) ENGINE = InnoDB
+DEFAULT CHARACTER SET = utf8mb4
+COLLATE = utf8mb4_unicode_ci
+COMMENT = 'Tabla para autenticación MCP: almacena códigos de verificación y tokens de sesión';
+
+
+-- -----------------------------------------------------
 -- Table `db_proyecto_titulacion`.`evidencia`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `db_proyecto_titulacion`.`evidencia` (
