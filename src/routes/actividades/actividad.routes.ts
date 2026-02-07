@@ -8,7 +8,9 @@ import {
     getEvidenciaById,
     updateEvidencia,
     deleteEvidencia,
-    updateEvidenciaNota
+    calificarEvidenciaTutor,
+    calificarEvidenciaDocente,
+    updateEstadoRevision
 } from '../../controllers/actividad.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -253,11 +255,11 @@ export default async function (fastify: FastifyInstance, opts: any) {
         }
     }, deleteEvidencia);
 
-    // PUT /evidencias/:id/calificar (Calificar Evidencia)
-    fastify.put('/evidencias/:id/calificar', {
+    // PUT /evidencias/:id/calificar-tutor (Calificar Evidencia - TUTOR)
+    fastify.put('/evidencias/:id/calificar-tutor', {
         schema: {
             tags: ['Evidencias'],
-            description: 'Calificar evidencia y agregar comentario',
+            description: 'Calificar evidencia como tutor (40%)',
             security: [{ bearerAuth: [] }],
             params: {
                 type: 'object',
@@ -267,17 +269,70 @@ export default async function (fastify: FastifyInstance, opts: any) {
                 type: 'object',
                 properties: {
                     calificacion: { type: 'number', minimum: 0, maximum: 10 },
-                    comentarios: { type: 'string' }
+                    feedback: { type: 'string' }
                 }
             }
         },
         preHandler: async (request: any, reply: any) => {
             const user = request.user;
-            const allowed = ['TUTOR', 'DIRECTOR', 'DOCENTE_INTEGRACION', 'COMITE', 'PRESIDENTE'];
-            if (!allowed.includes(user.rol)) {
-                return reply.code(403).send({ message: 'No tienes permisos para calificar' });
+            if (user.rol !== 'TUTOR') {
+                return reply.code(403).send({ message: 'Solo tutores pueden calificar' });
             }
         }
-    }, updateEvidenciaNota);
+    }, calificarEvidenciaTutor);
+
+    // PUT /evidencias/:id/calificar-docente (Calificar Evidencia - DOCENTE)
+    fastify.put('/evidencias/:id/calificar-docente', {
+        schema: {
+            tags: ['Evidencias'],
+            description: 'Calificar evidencia como docente de integración (60%)',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                properties: { id: { type: 'integer' } }
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    calificacion: { type: 'number', minimum: 0, maximum: 10 },
+                    feedback: { type: 'string' }
+                }
+            }
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            if (user.rol !== 'DOCENTE_INTEGRACION') {
+                return reply.code(403).send({ message: 'Solo docentes de integración pueden calificar' });
+            }
+        }
+    }, calificarEvidenciaDocente);
+
+    // PUT /evidencias/:id/estado (Actualizar estado de revisión)
+    fastify.put('/evidencias/:id/estado', {
+        schema: {
+            tags: ['Evidencias'],
+            description: 'Actualizar estado de revisión de evidencia',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                properties: { id: { type: 'integer' } }
+            },
+            body: {
+                type: 'object',
+                required: ['estado'],
+                properties: {
+                    estado: { type: 'string', enum: ['PENDIENTE', 'APROBADO', 'RECHAZADO'] },
+                    comentario: { type: 'string' }
+                }
+            }
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            const allowed = ['TUTOR', 'DOCENTE_INTEGRACION'];
+            if (!allowed.includes(user.rol)) {
+                return reply.code(403).send({ message: 'No tienes permisos para actualizar el estado' });
+            }
+        }
+    }, updateEstadoRevision);
 
 }

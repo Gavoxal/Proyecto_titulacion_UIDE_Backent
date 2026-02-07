@@ -2,7 +2,16 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createPropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { titulo, objetivos, areaConocimientoId, archivoUrl, problematica, alcance } = request.body as any;
+    const {
+        titulo,
+        objetivos,
+        areaConocimientoId,
+        archivoUrl,
+        problematica,
+        alcance,
+        carrera,
+        malla
+    } = request.body as any;
     const usuario = request.user as any; // From JWT
 
     try {
@@ -33,7 +42,11 @@ export const createPropuesta = async (request: FastifyRequest, reply: FastifyRep
                 problematica,
                 alcance,
                 fkEstudiante: usuario.id,
-                estado: 'PENDIENTE'
+                estado: 'PENDIENTE',
+                // Nuevos campos
+                carrera,
+                malla,
+                estadoRevision: 'PENDIENTE'
             },
             include: {
                 areaConocimiento: true
@@ -156,5 +169,37 @@ export const updateEstadoPropuesta = async (request: FastifyRequest, reply: Fast
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error actualizando propuesta' });
+    }
+};
+
+/**
+ * Revisar propuesta (DIRECTOR/COORDINADOR)
+ * Acceso: DIRECTOR, COORDINADOR
+ */
+export const revisarPropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { id } = request.params as any;
+    const { estadoRevision, comentariosRevision } = request.body as any;
+    const usuario = request.user as any;
+
+    try {
+        // Verificar que sea DIRECTOR o COORDINADOR
+        if (!['DIRECTOR', 'COORDINADOR'].includes(usuario.rol)) {
+            return reply.code(403).send({ message: 'Solo directores y coordinadores pueden revisar propuestas' });
+        }
+
+        const propuestaActualizada = await prisma.propuesta.update({
+            where: { id: Number(id) },
+            data: {
+                estadoRevision,
+                comentariosRevision,
+                fechaRevision: new Date()
+            }
+        });
+
+        return propuestaActualizada;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error revisando propuesta' });
     }
 };

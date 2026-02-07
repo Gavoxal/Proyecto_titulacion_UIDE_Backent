@@ -12,23 +12,32 @@ datasource db {
 // ============================================
 
 model Usuario {
-  id                  Int       @id @default(autoincrement())
-  cedula              String    @unique @db.VarChar(15)
-  nombres             String    @db.VarChar(191)
-  apellidos           String    @db.VarChar(191)
-  correoInstitucional String    @unique @map("correo_institucional") @db.VarChar(191)
-  rol                 Rol       @default(ESTUDIANTE)
-  createdAt           DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt           DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  id                  Int      @id @default(autoincrement())
+  cedula              String   @unique @db.VarChar(15)
+  nombres             String   @db.VarChar(191)
+  apellidos           String   @db.VarChar(191)
+  correoInstitucional String   @unique @map("correo_institucional") @db.VarChar(191)
+  rol                 Rol      @default(ESTUDIANTE)
+  createdAt           DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
-  // Relaciones
-  auth                Auth?
-  propuestas          Propuesta[]
-  comentarios         Comentario[]
-  notificaciones      Notificacion[]
-  comites             Comite[]
-  prerequisitos       EstudiantePrerequisito[]
-  estudiantePerfil    EstudiantePerfil?
+  // Relaciones existentes
+  auth             Auth?
+  propuestas       Propuesta[]
+  comentarios      Comentario[]
+  notificaciones   Notificacion[]
+  comites          Comite[]
+  prerequisitos    EstudiantePrerequisito[]
+  estudiantePerfil EstudiantePerfil?
+
+  // Nuevas relaciones
+  reunionesComoTutor            BitacoraReunion[]            @relation("TutorReuniones")
+  reunionesComoEstudiante       BitacoraReunion[]            @relation("EstudianteReuniones")
+  votacionesComoEstudiante      VotacionTutor[]              @relation("EstudianteVotaciones")
+  votacionesComoTutor           VotacionTutor[]              @relation("TutorVotaciones")
+  propuestasRevisadas           Propuesta[]                  @relation("PropuestasRevisadas")
+  participacionesDefensaPrivada ParticipanteDefensaPrivada[] @relation("ParticipantesDefensaPrivada")
+  participacionesDefensaPublica ParticipanteDefensaPublica[] @relation("ParticipantesDefensaPublica")
 
   @@map("usuarios")
 }
@@ -71,26 +80,44 @@ model AreaConocimiento {
 // ============================================
 
 model Propuesta {
-  id                   Int       @id @default(autoincrement())
-  titulo               String    @db.VarChar(191)
-  objetivos            String    @db.Text
-  problematica         String?   @db.Text
-  areaConocimientoId   Int       @map("area_conocimiento_id")
-  alcance              String?   @db.VarChar(191)
-  archivoUrl           String?   @map("archivo_url") @db.VarChar(191)
-  fechaPublicacion     DateTime  @default(now()) @map("fecha_publicacion") @db.DateTime(3)
-  estado               EstadoPropuesta @default(PENDIENTE)
-  fkEstudiante         Int       @map("fk_estudiante")
-  fechaDefensa         DateTime? @map("fecha_defensa") @db.DateTime(3)
-  resultadoDefensa     ResultadoDefensa? @default(PENDIENTE) @map("resultado_defensa")
+  id                 Int             @id @default(autoincrement())
+  titulo             String          @db.VarChar(191)
+  objetivos          String          @db.Text
+  problematica       String?         @db.Text
+  areaConocimientoId Int             @map("area_conocimiento_id")
+  alcance            String?         @db.VarChar(191)
+  archivoUrl         String?         @map("archivo_url") @db.VarChar(191)
+  fechaPublicacion   DateTime        @default(now()) @map("fecha_publicacion") @db.DateTime(3)
+  estado             EstadoPropuesta @default(PENDIENTE)
+  fkEstudiante       Int             @map("fk_estudiante")
 
-  // Relaciones
-  areaConocimiento     AreaConocimiento @relation(fields: [areaConocimientoId], references: [id])
-  estudiante           Usuario   @relation(fields: [fkEstudiante], references: [id])
-  trabajosTitulacion   TrabajoTitulacion[]
-  actividades          Actividad[]
-  comites              Comite[]
-  entregablesFinales   EntregableFinal[]
+  // Defensa (mantener para compatibilidad)
+  fechaDefensa     DateTime?         @map("fecha_defensa") @db.DateTime(3)
+  resultadoDefensa ResultadoDefensa? @default(PENDIENTE) @map("resultado_defensa")
+
+  // Nuevos campos - Información Académica
+  carrera String? @db.VarChar(191)
+  malla   String? @db.VarChar(100)
+
+  // Nuevos campos - Revisión
+  comentarioRevision String?   @map("comentario_revision") @db.Text
+  fechaRevision      DateTime? @map("fecha_revision") @db.DateTime(3)
+  revisadoPor        Int?      @map("revisado_por")
+
+  // Relaciones existentes
+  areaConocimiento   AreaConocimiento    @relation(fields: [areaConocimientoId], references: [id])
+  estudiante         Usuario             @relation(fields: [fkEstudiante], references: [id])
+  trabajosTitulacion TrabajoTitulacion[]
+  actividades        Actividad[]
+  comites            Comite[]
+  entregablesFinales EntregableFinal[]
+
+  // Nuevas relaciones
+  bitacoraReuniones BitacoraReunion[]
+  votacionesTutor   VotacionTutor[]
+  defensaPrivada    EvaluacionDefensaPrivada?
+  defensaPublica    EvaluacionDefensaPublica?
+  revisor           Usuario?                  @relation("PropuestasRevisadas", fields: [revisadoPor], references: [id])
 
   @@map("propuestas")
 }
@@ -116,7 +143,12 @@ model TrabajoTitulacion {
   propuestasId Int @map("propuestas_id")
   fkTutorId    Int @map("fk_tutor_id")
 
-  propuesta    Propuesta @relation(fields: [propuestasId], references: [id])
+  // Nuevos campos
+  fechaAsignacion  DateTime              @default(now()) @map("fecha_asignacion") @db.DateTime(3)
+  estadoAsignacion EstadoAsignacionTutor @default(ACTIVO)
+  observaciones    String?               @db.Text
+
+  propuesta Propuesta @relation(fields: [propuestasId], references: [id])
 
   @@id([propuestasId, fkTutorId])
   @@map("trabajo_titulacion")
@@ -127,15 +159,22 @@ model TrabajoTitulacion {
 // ============================================
 
 model Actividad {
-  id          Int     @id @default(autoincrement())
-  nombre      String  @db.VarChar(191)
-  descripcion String? @db.Text
-  propuestaId Int     @map("propuesta_id")
+  id          Int           @id @default(autoincrement())
+  nombre      String        @db.VarChar(191)
+  descripcion String?       @db.Text
+  propuestaId Int           @map("propuesta_id")
   tipo        TipoActividad @default(DOCENCIA)
 
+  // Nuevos campos
+  fechaAsignacion DateTime        @default(now()) @map("fecha_asignacion") @db.DateTime(3)
+  fechaActivacion DateTime?       @map("fecha_activacion") @db.DateTime(3)
+  fechaEntrega    DateTime?       @map("fecha_entrega") @db.DateTime(3)
+  requisitos      Json? // Array de strings con requisitos
+  estado          EstadoActividad @default(NO_ENTREGADO)
+
   // Relaciones
-  propuesta   Propuesta  @relation(fields: [propuestaId], references: [id], onDelete: Restrict)
-  evidencias  Evidencia[]
+  propuesta  Propuesta   @relation(fields: [propuestaId], references: [id], onDelete: Restrict)
+  evidencias Evidencia[]
 
   @@map("actividades")
 }
@@ -145,23 +184,43 @@ enum TipoActividad {
   TUTORIA
 }
 
+enum EstadoActividad {
+  ENTREGADO
+  NO_ENTREGADO
+}
+
 // ============================================
 // 6. EVIDENCIAS (ACTUALIZADO)
 // ============================================
 
 model Evidencia {
-  id           Int       @id @default(autoincrement())
+  id           Int             @id @default(autoincrement())
   semana       Int
-  contenido    String    @db.Text
-  archivoUrl   String?   @map("archivo_url") @db.VarChar(191)
-  fechaEntrega DateTime  @default(now()) @map("fecha_entrega") @db.DateTime(3)
+  contenido    String          @db.Text
+  archivoUrl   String?         @map("archivo_url") @db.VarChar(191)
+  fechaEntrega DateTime        @default(now()) @map("fecha_entrega") @db.DateTime(3)
   estado       EstadoEvidencia @default(ENTREGADO)
-  calificacion Decimal?  @db.Decimal(4, 2)
-  actividadId  Int       @map("actividad_id")
+  actividadId  Int             @map("actividad_id")
+
+  // Calificaciones duales (Tutor + Docente Integración)
+  calificacionTutor      Decimal?        @map("calificacion_tutor") @db.Decimal(4, 2)
+  feedbackTutor          String?         @map("feedback_tutor") @db.Text
+  fechaCalificacionTutor DateTime?       @map("fecha_calificacion_tutor") @db.DateTime(3)
+  estadoRevisionTutor    EstadoRevision? @default(PENDIENTE) @map("estado_revision_tutor")
+
+  calificacionDocente      Decimal?        @map("calificacion_docente") @db.Decimal(4, 2)
+  feedbackDocente          String?         @map("feedback_docente") @db.Text
+  fechaCalificacionDocente DateTime?       @map("fecha_calificacion_docente") @db.DateTime(3)
+  estadoRevisionDocente    EstadoRevision? @default(PENDIENTE) @map("estado_revision_docente")
+
+  // Calificación final ponderada (calculada)
+  calificacionFinal  Decimal? @map("calificacion_final") @db.Decimal(4, 2)
+  ponderacionTutor   Decimal  @default(0.40) @map("ponderacion_tutor") @db.Decimal(3, 2) // 40%
+  ponderacionDocente Decimal  @default(0.60) @map("ponderacion_docente") @db.Decimal(3, 2) // 60%
 
   // Relaciones
-  actividad    Actividad   @relation(fields: [actividadId], references: [id], onDelete: Restrict)
-  comentarios  Comentario[]
+  actividad   Actividad    @relation(fields: [actividadId], references: [id], onDelete: Restrict)
+  comentarios Comentario[]
 
   @@map("evidencia")
 }
@@ -169,6 +228,13 @@ model Evidencia {
 enum EstadoEvidencia {
   ENTREGADO
   NO_ENTREGADO
+}
+
+enum EstadoRevision {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  REQUIERE_CAMBIOS
 }
 
 // ============================================
@@ -182,8 +248,8 @@ model Comentario {
   descripcion String? @db.Text
 
   // Relaciones
-  evidencia   Evidencia @relation(fields: [evidenciaId], references: [id], onDelete: Restrict)
-  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  evidencia Evidencia @relation(fields: [evidenciaId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
 
   @@map("comentarios")
 }
@@ -193,11 +259,11 @@ model Comentario {
 // ============================================
 
 model CatalogoPrerequisito {
-  id          Int      @id @default(autoincrement())
-  nombre      String   @db.VarChar(191)
-  descripcion String?  @db.Text
-  orden       Int      @default(1)
-  activo      Boolean  @default(true)
+  id          Int     @id @default(autoincrement())
+  nombre      String  @db.VarChar(191)
+  descripcion String? @db.Text
+  orden       Int     @default(1)
+  activo      Boolean @default(true)
 
   // Relaciones
   estudiantePrerequisitos EstudiantePrerequisito[]
@@ -206,16 +272,16 @@ model CatalogoPrerequisito {
 }
 
 model EstudiantePrerequisito {
-  id                 Int       @id @default(autoincrement())
-  prerequisitoId     Int       @map("prerequisito_id")
-  cumplido           Boolean   @default(false)
-  archivoUrl         String?   @map("archivo_url") @db.VarChar(191)
-  fechaCumplimiento  DateTime? @map("fecha_cumplimiento") @db.DateTime(3)
-  fkEstudiante       Int       @map("fk_estudiante")
+  id                Int       @id @default(autoincrement())
+  prerequisitoId    Int       @map("prerequisito_id")
+  cumplido          Boolean   @default(false)
+  archivoUrl        String?   @map("archivo_url") @db.VarChar(191)
+  fechaCumplimiento DateTime? @map("fecha_cumplimiento") @db.DateTime(3)
+  fkEstudiante      Int       @map("fk_estudiante")
 
   // Relaciones
-  prerequisito       CatalogoPrerequisito @relation(fields: [prerequisitoId], references: [id], onDelete: Restrict)
-  estudiante         Usuario              @relation(fields: [fkEstudiante], references: [id], onDelete: Restrict)
+  prerequisito CatalogoPrerequisito @relation(fields: [prerequisitoId], references: [id], onDelete: Restrict)
+  estudiante   Usuario              @relation(fields: [fkEstudiante], references: [id], onDelete: Restrict)
 
   @@unique([fkEstudiante, prerequisitoId])
   @@map("estudiante_prerequisitos")
@@ -233,7 +299,7 @@ model Notificacion {
   usuarioId     Int      @map("usuario_id")
 
   // Relaciones
-  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
 
   @@map("notificaciones")
 }
@@ -243,14 +309,14 @@ model Notificacion {
 // ============================================
 
 model EntregableFinal {
-  id           Int      @id @default(autoincrement())
+  id           Int            @id @default(autoincrement())
   tipo         TipoEntregable
-  urlArchivo   String   @map("url_archivo") @db.VarChar(255)
-  fechaSubida  DateTime @default(now()) @map("fecha_subida") @db.DateTime(3)
-  propuestasId Int      @map("propuestas_id")
+  urlArchivo   String         @map("url_archivo") @db.VarChar(255)
+  fechaSubida  DateTime       @default(now()) @map("fecha_subida") @db.DateTime(3)
+  propuestasId Int            @map("propuestas_id")
 
   // Relaciones
-  propuesta    Propuesta @relation(fields: [propuestasId], references: [id], onDelete: Restrict)
+  propuesta Propuesta @relation(fields: [propuestasId], references: [id], onDelete: Restrict)
 
   @@map("entregables_finales")
 }
@@ -267,15 +333,21 @@ enum TipoEntregable {
 // ============================================
 
 model Comite {
-  usuarioId     Int      @map("usuario_id")
-  propuestaId   Int      @map("trabajo_titulacion_propuestas_id")
+  usuarioId     Int       @map("usuario_id")
+  propuestaId   Int       @map("trabajo_titulacion_propuestas_id")
   rol           RolComite
-  calificacion  Decimal? @db.Decimal(4, 2)
-  fechaAsignada DateTime? @db.Date @map("fecha_asignada")
+  calificacion  Decimal?  @db.Decimal(4, 2)
+  fechaAsignada DateTime? @map("fecha_asignada") @db.Date
+
+  // Nuevos campos - Detalles de Defensa Pública
+  horaDefensa DateTime?    @map("hora_defensa") @db.Time(0)
+  aulaDefensa String?      @map("aula_defensa") @db.VarChar(50)
+  comentarios String?      @db.Text
+  estado      EstadoComite @default(ACTIVO)
 
   // Relaciones
-  usuario       Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
-  propuesta     Propuesta @relation(fields: [propuestaId], references: [id])
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  propuesta Propuesta @relation(fields: [propuestaId], references: [id])
 
   @@id([usuarioId, propuestaId])
   @@map("comite")
@@ -287,26 +359,37 @@ enum RolComite {
   PRESIDENTE @map("Presidente")
 }
 
+enum EstadoComite {
+  ACTIVO
+  INACTIVO
+}
+
+enum EstadoAsignacionTutor {
+  ACTIVO
+  REASIGNADO
+  FINALIZADO
+}
+
 // ============================================
 // 12. ESTUDIANTE PERFIL
 // ============================================
 
 model EstudiantePerfil {
-  id              Int     @id @default(autoincrement())
-  sexo            String? @db.VarChar(20)
-  estadoEscuela   String? @map("estado_escuela") @db.VarChar(50)
-  sede            String? @db.VarChar(100)
-  escuela         String? @db.VarChar(100)
-  codigoMalla     String? @map("codigo_malla") @db.VarChar(50)
-  malla           String? @db.VarChar(100)
-  periodoLectivo  String? @map("periodo_lectivo") @db.VarChar(100)
-  ciudad          String? @db.VarChar(100)
-  provincia       String? @db.VarChar(100)
-  pais            String? @db.VarChar(100)
-  usuarioId       Int     @unique @map("usuario_id")
+  id             Int     @id @default(autoincrement())
+  sexo           String? @db.VarChar(20)
+  estadoEscuela  String? @map("estado_escuela") @db.VarChar(50)
+  sede           String? @db.VarChar(100)
+  escuela        String? @db.VarChar(100)
+  codigoMalla    String? @map("codigo_malla") @db.VarChar(50)
+  malla          String? @db.VarChar(100)
+  periodoLectivo String? @map("periodo_lectivo") @db.VarChar(100)
+  ciudad         String? @db.VarChar(100)
+  provincia      String? @db.VarChar(100)
+  pais           String? @db.VarChar(100)
+  usuarioId      Int     @unique @map("usuario_id")
 
   // Relaciones
-  usuario         Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
 
   @@map("estudiantes_perfil")
 }
@@ -328,3 +411,167 @@ model McpAuth {
   @@map("mcp_auth")
 }
 
+// ============================================
+// 14. BITÁCORA DE REUNIONES
+// ============================================
+
+model BitacoraReunion {
+  id           Int @id @default(autoincrement())
+  tutorId      Int @map("tutor_id")
+  estudianteId Int @map("estudiante_id")
+  propuestaId  Int @map("propuesta_id")
+
+  fecha      DateTime         @db.Date
+  horaInicio DateTime         @map("hora_inicio") @db.Time(0)
+  horaFin    DateTime         @map("hora_fin") @db.Time(0)
+  modalidad  ModalidadReunion
+
+  resumen     String  @db.Text
+  compromisos Json // Array de strings con compromisos
+  asistio     Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  // Relaciones
+  tutor      Usuario   @relation("TutorReuniones", fields: [tutorId], references: [id], onDelete: Restrict)
+  estudiante Usuario   @relation("EstudianteReuniones", fields: [estudianteId], references: [id], onDelete: Restrict)
+  propuesta  Propuesta @relation(fields: [propuestaId], references: [id], onDelete: Restrict)
+
+  @@index([tutorId, estudianteId])
+  @@index([propuestaId])
+  @@map("bitacora_reuniones")
+}
+
+enum ModalidadReunion {
+  PRESENCIAL
+  VIRTUAL
+}
+
+// ============================================
+// 15. VOTACIÓN DE TUTORES
+// ============================================
+
+model VotacionTutor {
+  id           Int @id @default(autoincrement())
+  estudianteId Int @map("estudiante_id")
+  tutorId      Int @map("tutor_id")
+  propuestaId  Int @map("propuesta_id")
+
+  prioridad     Int // 1 = primera opción, 2 = segunda, 3 = tercera
+  justificacion String?  @db.Text
+  fechaVotacion DateTime @default(now()) @map("fecha_votacion") @db.DateTime(3)
+
+  // Relaciones
+  estudiante Usuario   @relation("EstudianteVotaciones", fields: [estudianteId], references: [id], onDelete: Restrict)
+  tutor      Usuario   @relation("TutorVotaciones", fields: [tutorId], references: [id], onDelete: Restrict)
+  propuesta  Propuesta @relation(fields: [propuestaId], references: [id], onDelete: Restrict)
+
+  @@unique([estudianteId, propuestaId, prioridad])
+  @@index([propuestaId])
+  @@map("votacion_tutores")
+}
+
+// ============================================
+// 16. EVALUACIÓN DEFENSA PRIVADA
+// ============================================
+
+model EvaluacionDefensaPrivada {
+  id          Int @id @default(autoincrement())
+  propuestaId Int @unique @map("propuesta_id")
+
+  // Programación
+  fechaDefensa DateTime? @map("fecha_defensa") @db.Date
+  horaDefensa  DateTime? @map("hora_defensa") @db.Time(0)
+  aula         String?   @db.VarChar(50)
+
+  // Evaluación
+  estado          EstadoDefensaPrivada @default(PENDIENTE)
+  calificacion    Decimal?             @db.Decimal(4, 2)
+  comentarios     String?              @db.Text
+  fechaEvaluacion DateTime?            @map("fecha_evaluacion") @db.DateTime(3)
+
+  // Relaciones
+  propuesta     Propuesta                    @relation(fields: [propuestaId], references: [id], onDelete: Restrict)
+  participantes ParticipanteDefensaPrivada[]
+
+  @@map("evaluacion_defensa_privada")
+}
+
+model ParticipanteDefensaPrivada {
+  evaluacionId     Int                     @map("evaluacion_id")
+  usuarioId        Int                     @map("usuario_id")
+  tipoParticipante TipoParticipanteDefensa @map("tipo_participante")
+  rol              String?                 @db.VarChar(50) // "Tutor", "Presidente", "Jurado 1", etc.
+  comentario       String?                 @db.Text
+  calificacion     Decimal?                @db.Decimal(4, 2)
+
+  // Relaciones
+  evaluacion EvaluacionDefensaPrivada @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+  usuario    Usuario                  @relation("ParticipantesDefensaPrivada", fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@id([evaluacionId, usuarioId])
+  @@map("participante_defensa_privada")
+}
+
+enum TipoParticipanteDefensa {
+  TUTOR
+  COMITE
+}
+
+enum EstadoDefensaPrivada {
+  PENDIENTE
+  PROGRAMADA
+  APROBADA
+  RECHAZADA
+}
+
+// ============================================
+// 17. EVALUACIÓN DEFENSA PÚBLICA
+// ============================================
+
+model EvaluacionDefensaPublica {
+  id          Int @id @default(autoincrement())
+  propuestaId Int @unique @map("propuesta_id")
+
+  // Programación
+  fechaDefensa DateTime? @map("fecha_defensa") @db.Date
+  horaDefensa  DateTime? @map("hora_defensa") @db.Time(0)
+  aula         String?   @db.VarChar(50)
+
+  // Evaluación
+  estado          EstadoDefensaPublica @default(BLOQUEADA)
+  calificacion    Decimal?             @db.Decimal(4, 2)
+  comentarios     String?              @db.Text
+  fechaEvaluacion DateTime?            @map("fecha_evaluacion") @db.DateTime(3)
+
+  // Relaciones
+  propuesta     Propuesta                    @relation(fields: [propuestaId], references: [id], onDelete: Restrict)
+  participantes ParticipanteDefensaPublica[]
+
+  @@map("evaluacion_defensa_publica")
+}
+
+model ParticipanteDefensaPublica {
+  evaluacionId     Int                     @map("evaluacion_id")
+  usuarioId        Int                     @map("usuario_id")
+  tipoParticipante TipoParticipanteDefensa @map("tipo_participante")
+  rol              String?                 @db.VarChar(50) // "Tutor", "Presidente", "Jurado 1", etc.
+  comentario       String?                 @db.Text
+  calificacion     Decimal?                @db.Decimal(4, 2)
+
+  // Relaciones
+  evaluacion EvaluacionDefensaPublica @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+  usuario    Usuario                  @relation("ParticipantesDefensaPublica", fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@id([evaluacionId, usuarioId])
+  @@map("participante_defensa_publica")
+}
+
+enum EstadoDefensaPublica {
+  BLOQUEADA // Hasta que se apruebe la privada
+  PENDIENTE
+  PROGRAMADA
+  APROBADA
+  RECHAZADA
+}

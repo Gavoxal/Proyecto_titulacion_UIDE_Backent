@@ -4,7 +4,15 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createActividad = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { nombre, descripcion, propuestaId, tipo } = request.body as any;
+    const {
+        nombre,
+        descripcion,
+        propuestaId,
+        tipo,
+        fechaActivacion,
+        fechaEntrega,
+        requisitos
+    } = request.body as any;
 
     try {
         const nuevaActividad = await prisma.actividad.create({
@@ -12,7 +20,12 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
                 nombre,
                 descripcion,
                 propuestaId: Number(propuestaId),
-                tipo: tipo || 'DOCENCIA' // Default to DOCENCIA
+                tipo: tipo || 'DOCENCIA',
+                // Nuevos campos
+                fechaActivacion: fechaActivacion ? new Date(fechaActivacion) : null,
+                fechaEntrega: fechaEntrega ? new Date(fechaEntrega) : null,
+                requisitos: requisitos || [],
+                estado: 'NO_ENTREGADO' // Default state
             }
         });
         return reply.code(201).send(nuevaActividad);
@@ -176,27 +189,50 @@ export const deleteEvidencia = async (request: FastifyRequest, reply: FastifyRep
     }
 };
 
-export const updateEvidenciaNota = async (request: FastifyRequest, reply: FastifyReply) => {
+/**
+ * Calificar evidencia - TUTOR
+ * Acceso: TUTOR
+ */
+export const calificarEvidenciaTutor = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { id } = request.params as any;
-    const { calificacion, comentarios } = request.body as any;
-
+    const { calificacion, feedback } = request.body as any;
     const usuario = request.user as any;
 
     try {
-        // 1. Actualizar nota
-        if (calificacion !== undefined) {
+        // Verificar que el usuario sea TUTOR
+        if (usuario.rol !== 'TUTOR') {
+            return reply.code(403).send({ message: 'Solo los tutores pueden calificar' });
+        }
+
+        // Actualizar calificación del tutor
+        const evidencia = await prisma.evidencia.update({
+            where: { id: Number(id) },
+            data: {
+                calificacionTutor: calificacion ? Number(calificacion) : null,
+                feedbackTutor: feedback,
+                fechaCalificacionTutor: new Date(),
+                estadoRevisionTutor: calificacion ? 'APROBADO' : 'PENDIENTE'
+            }
+        });
+
+        // Calcular calificación final si ambas calificaciones existen
+        if (evidencia.calificacionTutor && evidencia.calificacionDocente) {
+            const calificacionFinal =
+                (Number(evidencia.calificacionTutor) * Number(evidencia.ponderacionTutor)) +
+                (Number(evidencia.calificacionDocente) * Number(evidencia.ponderacionDocente));
+
             await prisma.evidencia.update({
                 where: { id: Number(id) },
-                data: { calificacion: Number(calificacion) }
+                data: { calificacionFinal }
             });
         }
 
-        // 2. Crear comentario si existe
-        if (comentarios) {
+        // Crear comentario si existe feedback
+        if (feedback) {
             await prisma.comentario.create({
                 data: {
-                    descripcion: comentarios,
+                    descripcion: feedback,
                     evidenciaId: Number(id),
                     usuarioId: usuario.id
                 }
@@ -212,5 +248,111 @@ export const updateEvidenciaNota = async (request: FastifyRequest, reply: Fastif
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error calificando evidencia' });
+    }
+};
+
+/**
+ * Calificar evidencia - DOCENTE INTEGRACIÓN
+ * Acceso: DOCENTE_INTEGRACION
+ */
+export const calificarEvidenciaDocente = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { id } = request.params as any;
+    const { calificacion, feedback } = request.body as any;
+    const usuario = request.user as any;
+
+    try {
+        // Verificar que el usuario sea DOCENTE_INTEGRACION
+        if (usuario.rol !== 'DOCENTE_INTEGRACION') {
+            return reply.code(403).send({ message: 'Solo los docentes de integración pueden calificar' });
+        }
+
+        // Actualizar calificación del docente
+        const evidencia = await prisma.evidencia.update({
+            where: { id: Number(id) },
+            data: {
+                calificacionDocente: calificacion ? Number(calificacion) : null,
+                feedbackDocente: feedback,
+                fechaCalificacionDocente: new Date(),
+                estadoRevisionDocente: calificacion ? 'APROBADO' : 'PENDIENTE'
+            }
+        });
+
+        // Calcular calificación final si ambas calificaciones existen
+        if (evidencia.calificacionTutor && evidencia.calificacionDocente) {
+            const calificacionFinal =
+                (Number(evidencia.calificacionTutor) * Number(evidencia.ponderacionTutor)) +
+                (Number(evidencia.calificacionDocente) * Number(evidencia.ponderacionDocente));
+
+            await prisma.evidencia.update({
+                where: { id: Number(id) },
+                data: { calificacionFinal }
+            });
+        }
+
+        // Crear comentario si existe feedback
+        if (feedback) {
+            await prisma.comentario.create({
+                data: {
+                    descripcion: feedback,
+                    evidenciaId: Number(id),
+                    usuarioId: usuario.id
+                }
+            });
+        }
+
+        const evidenciaActualizada = await prisma.evidencia.findUnique({
+            where: { id: Number(id) },
+            include: { comentarios: true }
+        });
+
+        return evidenciaActualizada;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error calificando evidencia' });
+    }
+};
+
+/**
+ * Actualizar estado de revisión
+ * Acceso: TUTOR, DOCENTE_INTEGRACION
+ */
+export const updateEstadoRevision = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { id } = request.params as any;
+    const { estado, comentario } = request.body as any;
+    const usuario = request.user as any;
+
+    try {
+        const updateData: any = {};
+
+        if (usuario.rol === 'TUTOR') {
+            updateData.estadoRevisionTutor = estado;
+        } else if (usuario.rol === 'DOCENTE_INTEGRACION') {
+            updateData.estadoRevisionDocente = estado;
+        } else {
+            return reply.code(403).send({ message: 'No tiene permiso para actualizar el estado' });
+        }
+
+        const evidencia = await prisma.evidencia.update({
+            where: { id: Number(id) },
+            data: updateData
+        });
+
+        // Crear comentario si existe
+        if (comentario) {
+            await prisma.comentario.create({
+                data: {
+                    descripcion: comentario,
+                    evidenciaId: Number(id),
+                    usuarioId: usuario.id
+                }
+            });
+        }
+
+        return evidencia;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error actualizando estado' });
     }
 };

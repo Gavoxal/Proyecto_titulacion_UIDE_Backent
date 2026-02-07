@@ -9,6 +9,7 @@
     "dev": "tsx watch src/app.ts",
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio",
+    "db:seed": "node prisma/seed.js",
     "mcp": "node src/mcp-server.js"
   },
   "keywords": [],
@@ -33,7 +34,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
-    "@types/node": "^25.0.8",
+    "@types/node": "^25.2.1",
     "prisma": "^5.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

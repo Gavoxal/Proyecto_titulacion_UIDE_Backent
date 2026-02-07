@@ -86,6 +86,14 @@ await app.register((await import('./routes/comite/comite.routes.js')).default, {
 // @ts-ignore
 await app.register((await import('./routes/estudiantes/estudiante.routes.js')).default, { prefix: '/api/v1/estudiantes' });
 
+// Nuevas rutas
+// @ts-ignore
+await app.register((await import('./routes/bitacora/bitacora.routes.js')).default, { prefix: '/api/v1/bitacora' });
+// @ts-ignore
+await app.register((await import('./routes/votacion/votacion.routes.js')).default, { prefix: '/api/v1/votacion' });
+// @ts-ignore
+await app.register((await import('./routes/defensas/defensa.routes.js')).default, { prefix: '/api/v1/defensas' });
+
 
 
 
