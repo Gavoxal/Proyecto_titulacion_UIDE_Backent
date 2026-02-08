@@ -1,7 +1,8 @@
 import {
     createComentario,
     getComentariosByEvidencia,
-    deleteComentario
+    deleteComentario,
+    getComentariosByPropuesta
 } from '../../controllers/comentario.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -29,14 +30,16 @@ export default async function (fastify: FastifyInstance, opts: any) {
     fastify.post('/', {
         schema: {
             tags: ['Comentarios'],
-            description: 'Agregar comentario a una evidencia (Solo docentes)',
+            description: 'Agregar comentario a una evidencia o propuesta (Solo docentes)',
             security: [{ bearerAuth: [] }],
             body: {
                 type: 'object',
-                required: ['descripcion', 'evidenciaId'],
+                // required: ['descripcion'], // Either evidenciaId or propuestaId requierd logic is in controller
+                required: ['descripcion'],
                 properties: {
                     descripcion: { type: 'string' },
-                    evidenciaId: { type: 'integer' }
+                    evidenciaId: { type: 'integer' },
+                    propuestaId: { type: 'integer' }
                 }
             }
         },
@@ -51,7 +54,7 @@ export default async function (fastify: FastifyInstance, opts: any) {
         }
     }, createComentario);
 
-    // GET /evidencia/:evidenciaId (Listar)
+    // GET /evidencia/:evidenciaId (Listar por evidencia)
     fastify.get('/evidencia/:evidenciaId', {
         schema: {
             tags: ['Comentarios'],
@@ -69,6 +72,25 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, getComentariosByEvidencia);
+
+    // GET /propuesta/:propuestaId (Listar por propuesta - NUEVO)
+    fastify.get('/propuesta/:propuestaId', {
+        schema: {
+            tags: ['Comentarios'],
+            description: 'Listar comentarios de una propuesta',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                properties: { propuestaId: { type: 'integer' } }
+            },
+            response: {
+                200: {
+                    type: 'array',
+                    items: comentarioSchema
+                }
+            }
+        }
+    }, getComentariosByPropuesta);
 
     // DELETE /:id
     fastify.delete('/:id', {

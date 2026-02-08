@@ -1,4 +1,13 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import fs from 'fs';
+import path from 'path';
+import { pipeline } from 'stream';
+import util from 'util';
+import { fileURLToPath } from 'url';
+
+const pump = util.promisify(pipeline);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const createPropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
@@ -12,6 +21,7 @@ export const createPropuesta = async (request: FastifyRequest, reply: FastifyRep
         carrera,
         malla
     } = request.body as any;
+
     const usuario = request.user as any; // From JWT
 
     try {
@@ -33,6 +43,17 @@ export const createPropuesta = async (request: FastifyRequest, reply: FastifyRep
             });
         }
 
+        // 2. Limitar a 3 propuestas máximo por estudiante
+        const propCount = await prisma.propuesta.count({
+            where: { fkEstudiante: usuario.id }
+        });
+
+        if (propCount >= 3) {
+            return reply.code(403).send({
+                message: 'No puedes crear más de 3 propuestas. Ya has alcanzado el límite permitido.'
+            });
+        }
+
         const nuevaPropuesta = await prisma.propuesta.create({
             data: {
                 titulo,
@@ -45,8 +66,7 @@ export const createPropuesta = async (request: FastifyRequest, reply: FastifyRep
                 estado: 'PENDIENTE',
                 // Nuevos campos
                 carrera,
-                malla,
-                estadoRevision: 'PENDIENTE'
+                malla
             },
             include: {
                 areaConocimiento: true
@@ -64,13 +84,18 @@ export const getPropuestas = async (request: FastifyRequest, reply: FastifyReply
     const usuario = request.user as any;
 
     try {
-        let where = {};
-        // Si es estudiante, solo ver sus propuestas
+        console.log(`[DEBUG] getPropuestas - User Role: ${usuario.rol}, ID: ${usuario.id}`);
+        let where: any = {};
+
+        // Use all-caps directly as defined in Rol enum
         if (usuario.rol === 'ESTUDIANTE') {
-            where = { fkEstudiante: usuario.id };
+            where = { fkEstudiante: Number(usuario.id) };
         } else if (usuario.rol === 'TUTOR') {
-            // Si es tutor, ver propuestas asignadas
-            where = { tutorId: usuario.id };
+            where = {
+                trabajosTitulacion: {
+                    some: { fkTutorId: Number(usuario.id) }
+                }
+            };
         }
 
         const propuestas = await prisma.propuesta.findMany({
@@ -79,13 +104,26 @@ export const getPropuestas = async (request: FastifyRequest, reply: FastifyReply
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
                 },
-                areaConocimiento: true
+                areaConocimiento: true,
+                trabajosTitulacion: {
+                    include: {
+                        tutor: {
+                            select: { nombres: true, apellidos: true, correoInstitucional: true }
+                        }
+                    }
+                }
             }
         });
+        console.log(`[DEBUG] Propuestas found: ${propuestas.length}`);
         return propuestas;
-    } catch (error) {
-        request.log.error(error);
-        return reply.code(500).send({ message: 'Error obteniendo propuestas' });
+    } catch (error: any) {
+        request.log.error(`[ERROR] getPropuestas: ${error.message}`);
+        console.error("Full Error Prisma getPropuestas:", error);
+        return reply.code(500).send({
+            message: 'Error obteniendo propuestas',
+            error: error.message,
+            prismaError: error.code // Prisma error code if available
+        });
     }
 };
 
@@ -94,14 +132,30 @@ export const getPropuestaById = async (request: FastifyRequest, reply: FastifyRe
     const { id } = request.params as any;
 
     try {
+        const propostaId = Number(id);
+        if (isNaN(propostaId)) {
+            return reply.code(400).send({ message: 'ID de propuesta inválido' });
+        }
+
         const propuesta = await prisma.propuesta.findUnique({
-            where: { id: Number(id) },
+            where: { id: propostaId },
             include: {
                 estudiante: {
                     select: { nombres: true, apellidos: true, cedula: true }
                 },
                 areaConocimiento: true,
-                actividades: true
+                actividades: {
+                    include: {
+                        evidencias: true
+                    }
+                },
+                trabajosTitulacion: {
+                    include: {
+                        tutor: {
+                            select: { nombres: true, apellidos: true, correoInstitucional: true }
+                        }
+                    }
+                }
             }
         });
 
@@ -159,8 +213,30 @@ export const updateEstadoPropuesta = async (request: FastifyRequest, reply: Fast
     const { estado } = request.body as any;
 
     try {
+        const propId = Number(id);
+        if (estado === 'APROBADA') {
+            // Obtener la propuesta para saber a qué estudiante pertenece
+            const currentProp = await prisma.propuesta.findUnique({
+                where: { id: propId }
+            });
+            if (!currentProp) return reply.code(404).send({ message: 'Propuesta no encontrada' });
+
+            // Verificar si el estudiante ya tiene una propuesta aprobada (distinta a esta)
+            const approvedExists = await prisma.propuesta.findFirst({
+                where: {
+                    fkEstudiante: currentProp.fkEstudiante,
+                    estado: 'APROBADA',
+                    id: { not: propId }
+                }
+            });
+
+            if (approvedExists) {
+                return reply.code(409).send({ message: 'El estudiante ya tiene una propuesta aprobada. No se puede aprobar otra.' });
+            }
+        }
+
         const propuestaActualizada = await prisma.propuesta.update({
-            where: { id: Number(id) },
+            where: { id: propId },
             data: {
                 estado
             }
@@ -183,16 +259,38 @@ export const revisarPropuesta = async (request: FastifyRequest, reply: FastifyRe
     const usuario = request.user as any;
 
     try {
+        const propId = Number(id);
         // Verificar que sea DIRECTOR o COORDINADOR
         if (!['DIRECTOR', 'COORDINADOR'].includes(usuario.rol)) {
             return reply.code(403).send({ message: 'Solo directores y coordinadores pueden revisar propuestas' });
         }
 
+        if (estadoRevision === 'APROBADA') {
+            // Obtener la propuesta para saber a qué estudiante pertenece
+            const currentProp = await prisma.propuesta.findUnique({
+                where: { id: propId }
+            });
+            if (!currentProp) return reply.code(404).send({ message: 'Propuesta no encontrada' });
+
+            // Verificar si el estudiante ya tiene una propuesta aprobada (distinta a esta)
+            const approvedExists = await prisma.propuesta.findFirst({
+                where: {
+                    fkEstudiante: currentProp.fkEstudiante,
+                    estado: 'APROBADA',
+                    id: { not: propId }
+                }
+            });
+
+            if (approvedExists) {
+                return reply.code(409).send({ message: 'El estudiante ya tiene una propuesta aprobada. No se puede aprobar otra.' });
+            }
+        }
+
         const propuestaActualizada = await prisma.propuesta.update({
-            where: { id: Number(id) },
+            where: { id: propId },
             data: {
-                estadoRevision,
-                comentariosRevision,
+                estado: estadoRevision,
+                comentarioRevision: comentariosRevision,
                 fechaRevision: new Date()
             }
         });
@@ -202,4 +300,55 @@ export const revisarPropuesta = async (request: FastifyRequest, reply: FastifyRe
         request.log.error(error);
         return reply.code(500).send({ message: 'Error revisando propuesta' });
     }
+};
+
+export const uploadPropuestaFile = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+        const data = await request.file();
+        if (!data) {
+            return reply.code(400).send({ message: 'No se subió ningún archivo' });
+        }
+
+        const uploadDir = path.join(__dirname, '../../uploads/propuestas');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const timestamp = Date.now();
+        const filename = `${timestamp}-${data.filename.replace(/\s/g, '_')}`;
+        const filepath = path.join(uploadDir, filename);
+
+        await pump(data.file, fs.createWriteStream(filepath));
+
+        const fileUrl = `/api/v1/propuestas/file/${filename}`;
+
+        return reply.code(200).send({ url: fileUrl });
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error subiendo archivo' });
+    }
+};
+
+export const servePropuestaFile = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { filename } = request.params as any;
+    const uploadDir = path.join(__dirname, '../../uploads/propuestas');
+    const filePath = path.join(uploadDir, filename);
+
+    if (!filePath.startsWith(uploadDir)) {
+        return reply.code(403).send({ message: 'Acceso denegado' });
+    }
+
+    if (!fs.existsSync(filePath)) {
+        return reply.code(404).send({ message: 'Archivo no encontrado' });
+    }
+
+    const stream = fs.createReadStream(filePath);
+    const ext = path.extname(filename).toLowerCase();
+    let contentType = 'application/octet-stream';
+    if (ext === '.pdf') contentType = 'application/pdf';
+    else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+    else if (ext === '.png') contentType = 'image/png';
+
+    reply.header('Content-Type', contentType);
+    return reply.send(stream);
 };

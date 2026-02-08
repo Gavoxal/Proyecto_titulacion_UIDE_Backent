@@ -2,16 +2,20 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 
 export const createComentario = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { descripcion, evidenciaId } = request.body as any;
+    const { descripcion, evidenciaId, propuestaId } = request.body as any;
     const usuario = request.user as any;
 
     try {
+        const data: any = {
+            descripcion,
+            usuarioId: usuario.id
+        };
+
+        if (evidenciaId) data.evidenciaId = Number(evidenciaId);
+        if (propuestaId) data.propuestaId = Number(propuestaId);
+
         const nuevoComentario = await prisma.comentario.create({
-            data: {
-                descripcion,
-                evidenciaId: Number(evidenciaId),
-                usuarioId: usuario.id
-            }
+            data
         });
         return reply.code(201).send(nuevoComentario);
     } catch (error) {
@@ -31,12 +35,34 @@ export const getComentariosByEvidencia = async (request: FastifyRequest, reply: 
                 usuario: {
                     select: { nombres: true, apellidos: true, rol: true }
                 }
-            }
+            },
+            orderBy: { id: 'asc' } // Or createdAt if available, schema doesn't have it
         });
         return comentarios;
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo comentarios' });
+    }
+};
+
+export const getComentariosByPropuesta = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { propuestaId } = request.params as any;
+
+    try {
+        const comentarios = await prisma.comentario.findMany({
+            where: { propuestaId: Number(propuestaId) },
+            include: {
+                usuario: {
+                    select: { nombres: true, apellidos: true, rol: true }
+                }
+            },
+            orderBy: { id: 'asc' }
+        });
+        return comentarios;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error obteniendo comentarios de propuesta' });
     }
 };
 

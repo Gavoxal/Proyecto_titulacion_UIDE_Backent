@@ -290,8 +290,8 @@ export const calificarDefensaPrivada = async (request: FastifyRequest, reply: Fa
         });
 
         const calificaciones = todosParticipantes
-            .map(p => p.calificacion)
-            .filter(c => c !== null) as number[];
+            .map(p => Number(p.calificacion))
+            .filter(c => c !== null && !isNaN(c)) as number[];
 
         if (calificaciones.length === todosParticipantes.length && calificaciones.length > 0) {
             const promedio = calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length;
@@ -642,8 +642,8 @@ export const calificarDefensaPublica = async (request: FastifyRequest, reply: Fa
         });
 
         const calificaciones = todosParticipantes
-            .map(p => p.calificacion)
-            .filter(c => c !== null) as number[];
+            .map(p => Number(p.calificacion))
+            .filter(c => c !== null && !isNaN(c)) as number[];
 
         if (calificaciones.length === todosParticipantes.length && calificaciones.length > 0) {
             const promedio = calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length;

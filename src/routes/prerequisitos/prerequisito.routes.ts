@@ -5,7 +5,8 @@ import {
     deleteEstudiantePrerequisito,
     getPrerequisitosDashboard,
     uploadPrerequisitoFile,
-    servePrerequisitoFile
+    servePrerequisitoFile,
+    checkCanCreatePropuesta
 } from '../../controllers/prerequisito.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -13,20 +14,36 @@ export default async function (fastify: FastifyInstance, opts: any) {
 
     fastify.addHook('onRequest', fastify.authenticate);
 
+    // GET /status (Verificar estado)
+    fastify.get('/status', {
+        schema: {
+            tags: ['Prerrequisitos'],
+            description: 'Verificar si el estudiante puede crear propuesta',
+            security: [{ bearerAuth: [] }]
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            if (user.rol !== 'ESTUDIANTE') {
+                return reply.code(403).send({ message: 'Solo estudiantes verifican su estado' });
+            }
+        }
+    }, checkCanCreatePropuesta);
+
     const prerequisitoSchema = {
         type: 'object',
         properties: {
             id: { type: 'integer' },
             nombre: { type: 'string' },
+            codigo: { type: 'string' },
             descripcion: { type: 'string' },
+            orden: { type: 'integer' },
+            estudiantePrerequisitoId: { type: ['integer', 'null'] },
+            entregado: { type: 'boolean' },
             cumplido: { type: 'boolean' },
-            estudiante: {
-                type: 'object',
-                properties: {
-                    nombres: { type: 'string' },
-                    apellidos: { type: 'string' }
-                }
-            }
+            archivoUrl: { type: ['string', 'null'] },
+            fechaCumplimiento: { type: ['string', 'null'] },
+            fechaActualizacion: { type: ['string', 'null'] },
+            observaciones: { type: 'string' }
         }
     };
 

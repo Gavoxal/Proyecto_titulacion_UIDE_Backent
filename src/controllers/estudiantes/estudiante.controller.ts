@@ -70,7 +70,7 @@ export const importarEstudiantes = async (request: FastifyRequest, reply: Fastif
 
         // Generate Credentials
         const username = email.split('@')[0];
-        const plainPassword = Math.random().toString(36).slice(-8); // Random password
+        const plainPassword = 'estudiante123'; // Default password for testing
         const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
         try {
@@ -121,7 +121,7 @@ export const importarEstudiantes = async (request: FastifyRequest, reply: Fastif
 
                 // 3. Create/Update Student Profile
                 // @ts-ignore
-                await tx.estudiante.upsert({
+                await tx.estudiantePerfil.upsert({
                     where: { usuarioId: usuario.id },
                     update: {
                         sexo: row['Sexo'],

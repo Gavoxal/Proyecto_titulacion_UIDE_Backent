@@ -4,7 +4,10 @@ import {
     getPropuestaById,
     updatePropuesta,
     deletePropuesta,
-    updateEstadoPropuesta
+    updateEstadoPropuesta,
+    uploadPropuestaFile,
+    servePropuestaFile,
+    revisarPropuesta
 } from '../../controllers/propuesta.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -17,13 +20,42 @@ export default async function (fastify: FastifyInstance, opts: any) {
         properties: {
             id: { type: 'integer' },
             titulo: { type: 'string' },
+            objetivos: { type: 'string' },
+            problematica: { type: 'string', nullable: true },
+            alcance: { type: 'string', nullable: true },
+            archivoUrl: { type: 'string', nullable: true },
             estado: { type: 'string' },
             fechaPublicacion: { type: 'string', format: 'date-time' },
             estudiante: {
                 type: 'object',
                 properties: {
                     nombres: { type: 'string' },
-                    apellidos: { type: 'string' }
+                    apellidos: { type: 'string' },
+                    cedula: { type: 'string' }
+                }
+            },
+            areaConocimiento: {
+                type: 'object',
+                properties: {
+                    id: { type: 'integer' },
+                    nombre: { type: 'string' },
+                    codigo: { type: 'string' }
+                }
+            },
+            trabajosTitulacion: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    properties: {
+                        tutor: {
+                            type: 'object',
+                            properties: {
+                                nombres: { type: 'string' },
+                                apellidos: { type: 'string' },
+                                correoInstitucional: { type: 'string' }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -60,7 +92,36 @@ export default async function (fastify: FastifyInstance, opts: any) {
         }
     }, getPropuestaById);
 
-    // POST / (Crear)
+    // POST /upload (Subir archivo primero)
+    fastify.post('/upload', {
+        schema: {
+            tags: ['Propuestas'],
+            description: 'Subir archivo de propuesta',
+            consumes: ['multipart/form-data'],
+            security: [{ bearerAuth: [] }]
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            if (user.rol !== 'ESTUDIANTE') {
+                return reply.code(403).send({ message: 'Solo los estudiantes pueden subir archivos' });
+            }
+        }
+    }, uploadPropuestaFile);
+
+    // GET /file/:filename (Servir archivo)
+    fastify.get('/file/:filename', {
+        schema: {
+            tags: ['Propuestas'],
+            description: 'Obtener archivo de propuesta',
+            params: {
+                type: 'object',
+                properties: { filename: { type: 'string' } }
+            }
+            // No auth required for public access if needed, or add auth if private
+        }
+    }, servePropuestaFile);
+
+    // POST / (Crear - recibe JSON con archivoUrl)
     fastify.post('/', {
         schema: {
             tags: ['Propuestas'],
@@ -68,23 +129,16 @@ export default async function (fastify: FastifyInstance, opts: any) {
             security: [{ bearerAuth: [] }],
             body: {
                 type: 'object',
-                required: ['titulo', 'objetivos', 'areaInvestigacion'],
+                required: ['titulo'],
                 properties: {
                     titulo: { type: 'string' },
                     objetivos: { type: 'string' },
+                    areaConocimientoId: { type: 'integer' },
+                    archivoUrl: { type: 'string' },
                     problematica: { type: 'string' },
                     alcance: { type: 'string' },
-                    archivoUrl: { type: 'string' },
-                    areaInvestigacion: {
-                        type: 'string',
-                        enum: [
-                            'CIENCIA_DE_DATOS_E_INTELIGENCIA_ARTIFICIAL',
-                            'GESTION_DE_LA_INFORMACION_Y_TRANSFORMACION_DIGITAL',
-                            'INFRAESTRUCTURA_TI_Y_CIBERSEGURIDAD',
-                            'INNOVACION_EMPRENDIMIENTO_Y_ETICA_TECNOLOGICA',
-                            'PROGRAMACION_Y_DESARROLLO_DE_SOFTWARE'
-                        ]
-                    }
+                    carrera: { type: 'string' },
+                    malla: { type: 'string' }
                 }
             }
         },
@@ -177,4 +231,25 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, updateEstadoPropuesta);
+
+    // PUT /:id/revision
+    fastify.put('/:id/revision', {
+        schema: {
+            tags: ['Propuestas'],
+            description: 'Revisar propuesta (Director/Coordinador)',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                properties: { id: { type: 'integer' } }
+            },
+            body: {
+                type: 'object',
+                required: ['estadoRevision'],
+                properties: {
+                    estadoRevision: { type: 'string', enum: ['APROBADO', 'RECHAZADO', 'CORRECCION'] },
+                    comentariosRevision: { type: 'string' }
+                }
+            }
+        }
+    }, revisarPropuesta);
 }

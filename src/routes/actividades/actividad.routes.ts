@@ -1,3 +1,4 @@
+
 import {
     createActividad,
     getActividadesByPropuesta,
@@ -10,7 +11,10 @@ import {
     deleteEvidencia,
     calificarEvidenciaTutor,
     calificarEvidenciaDocente,
-    updateEstadoRevision
+    updateEstadoRevision,
+    getEvidencias,
+    uploadEvidenciaFile,
+    serveEvidenciaFile
 } from '../../controllers/actividad.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -22,11 +26,24 @@ export default async function (fastify: FastifyInstance, opts: any) {
     const actividadSchema = {
         type: 'object',
         properties: {
-            idActividades: { type: 'integer' },
+            id: { type: 'integer' },
             nombre: { type: 'string' },
             descripcion: { type: 'string' },
-            tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] },
-            evidencias: { type: 'array', items: { type: 'object', additionalProperties: true } }
+            propuestaId: { type: 'integer' },
+            tipo: { type: 'string' },
+            fechaAsignacion: { type: 'string', format: 'date-time' },
+            fecha_asignacion: { type: 'string', format: 'date-time' },
+            fechaActivacion: { type: 'string', format: 'date-time' },
+            fecha_activacion: { type: 'string', format: 'date-time' },
+            fechaEntrega: { type: 'string', format: 'date-time' },
+            fecha_entrega: { type: 'string', format: 'date-time' },
+            createdAt: { type: 'string', format: 'date-time' },
+            fechaCreacion: { type: 'string', format: 'date-time' },
+            fecha_creacion: { type: 'string', format: 'date-time' },
+            requisitos: { type: 'array', items: { type: 'string' } },
+            estado: { type: 'string' },
+            evidencias: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            propuesta: { type: 'object', additionalProperties: true }
         }
     };
 
@@ -36,8 +53,19 @@ export default async function (fastify: FastifyInstance, opts: any) {
             id: { type: 'integer' },
             semana: { type: 'integer' },
             contenido: { type: 'string' },
-            calificacion: { type: 'number' },
-            estado: { type: 'string' }
+            archivoUrl: { type: 'string' },
+            fechaEntrega: { type: 'string', format: 'date-time' },
+            fecha_entrega: { type: 'string', format: 'date-time' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+            estado: { type: 'string' },
+            calificacionTutor: { type: 'number' },
+            feedbackTutor: { type: 'string' },
+            fechaCalificacionTutor: { type: 'string', format: 'date-time' },
+            calificacionDocente: { type: 'number' },
+            feedbackDocente: { type: 'string' },
+            fechaCalificacionDocente: { type: 'string', format: 'date-time' },
+            calificacionFinal: { type: 'number' }
         }
     };
 
@@ -51,11 +79,11 @@ export default async function (fastify: FastifyInstance, opts: any) {
             security: [{ bearerAuth: [] }],
             body: {
                 type: 'object',
-                required: ['nombre', 'propuestasId'],
+                required: ['nombre', 'propuestaId'],
                 properties: {
                     nombre: { type: 'string' },
                     descripcion: { type: 'string' },
-                    propuestasId: { type: 'integer' },
+                    propuestaId: { type: 'integer' },
                     tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] }
                 }
             }
@@ -155,11 +183,54 @@ export default async function (fastify: FastifyInstance, opts: any) {
 
     // --- RUTAS EVIDENCIAS ---
 
-    // POST /:actividadId/evidencias (Subir Evidencia)
+    // GET /evidencias (Listar todas las evidencias para Docente Integración)
+    fastify.get('/evidencias', {
+        schema: {
+            tags: ['Evidencias'],
+            description: 'Listar todas las evidencias (Solo docentes)',
+            security: [{ bearerAuth: [] }]
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            if (user.rol === 'ESTUDIANTE') {
+                return reply.code(403).send({ message: 'Solo docentes pueden ver todas las evidencias' });
+            }
+        }
+    }, getEvidencias);
+
+    // POST /evidencias/upload (Subir archivo primero)
+    fastify.post('/evidencias/upload', {
+        schema: {
+            tags: ['Evidencias'],
+            description: 'Subir archivo de evidencia',
+            consumes: ['multipart/form-data'],
+            security: [{ bearerAuth: [] }]
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user;
+            if (user.rol !== 'ESTUDIANTE') {
+                return reply.code(403).send({ message: 'Solo los estudiantes pueden subir evidencias' });
+            }
+        }
+    }, uploadEvidenciaFile);
+
+    // GET /evidencias/file/:filename (Servir archivo)
+    fastify.get('/evidencias/file/:filename', {
+        schema: {
+            tags: ['Evidencias'],
+            description: 'Obtener archivo de evidencia',
+            params: {
+                type: 'object',
+                properties: { filename: { type: 'string' } }
+            }
+        }
+    }, serveEvidenciaFile);
+
+    // POST /:actividadId/evidencias (Crear Evidencia - recibe JSON)
     fastify.post('/:actividadId/evidencias', {
         schema: {
             tags: ['Evidencias'],
-            description: 'Subir evidencia (Solo estudiantes)',
+            description: 'Crear evidencia (Solo estudiantes)',
             security: [{ bearerAuth: [] }],
             params: {
                 type: 'object',
@@ -180,8 +251,6 @@ export default async function (fastify: FastifyInstance, opts: any) {
         },
         preHandler: async (request: any, reply: any) => {
             const user = request.user;
-            // "un estudiante... si [puede] subir evidencias"
-            // "docente... no puede hacer post"
             if (user.rol !== 'ESTUDIANTE') {
                 return reply.code(403).send({ message: 'Solo estudiantes pueden subir evidencias' });
             }

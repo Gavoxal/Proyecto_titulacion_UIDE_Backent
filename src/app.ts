@@ -22,7 +22,11 @@ const app = Fastify({
 
 // Plugins
 await app.register(cors);
-await app.register(multipart);
+await app.register(multipart, {
+    limits: {
+        fileSize: 50 * 1024 * 1024 // 50MB
+    }
+});
 
 // Swagger
 // Swagger
@@ -85,6 +89,11 @@ await app.register((await import('./routes/entregables/entregable.routes.js')).d
 await app.register((await import('./routes/comite/comite.routes.js')).default, { prefix: '/api/v1/comite' });
 // @ts-ignore
 await app.register((await import('./routes/estudiantes/estudiante.routes.js')).default, { prefix: '/api/v1/estudiantes' });
+
+// @ts-ignore
+await app.register((await import('./routes/tutor/tutor.routes.js')).default, { prefix: '/api/v1/tutor' });
+// @ts-ignore
+await app.register((await import('./routes/areas/areaConocimiento.routes.js')).default, { prefix: '/api/v1/areas-conocimiento' });
 
 // Nuevas rutas
 // @ts-ignore

@@ -7,8 +7,8 @@ export const asignarJurado = async (request: FastifyRequest, reply: FastifyReply
     try {
         const asignacion = await prisma.comite.create({
             data: {
-                usuariosId: Number(usuarioId),
-                propuestasId: Number(propuestaId),
+                usuarioId: Number(usuarioId),
+                propuestaId: Number(propuestaId),
                 rol, // JURADO_1, JURADO_2, PRESIDENTE
                 fechaAsignada: new Date()
             }
@@ -26,7 +26,7 @@ export const getComiteByPropuesta = async (request: FastifyRequest, reply: Fasti
 
     try {
         const comite = await prisma.comite.findMany({
-            where: { propuestasId: Number(propuestaId) },
+            where: { propuestaId: Number(propuestaId) },
             include: {
                 usuario: {
                     select: { nombres: true, apellidos: true, correoInstitucional: true, rol: true }
@@ -68,8 +68,8 @@ export const calificarDefensa = async (request: FastifyRequest, reply: FastifyRe
         // Un jurado califica SU asignacion
         const asignacion = await prisma.comite.findFirst({
             where: {
-                propuestasId: Number(propuestaId),
-                usuariosId: usuario.id
+                propuestaId: Number(propuestaId),
+                usuarioId: usuario.id
             }
         });
 
@@ -79,9 +79,9 @@ export const calificarDefensa = async (request: FastifyRequest, reply: FastifyRe
 
         await prisma.comite.update({
             where: {
-                usuariosId_propuestasId: {
-                    usuariosId: usuario.id,
-                    propuestasId: Number(propuestaId)
+                usuarioId_propuestaId: {
+                    usuarioId: usuario.id,
+                    propuestaId: Number(propuestaId)
                 }
             },
             data: {

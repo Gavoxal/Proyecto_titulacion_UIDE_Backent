@@ -1,4 +1,19 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import fs from 'fs';
+import path from 'path';
+import { pipeline } from 'stream';
+import util from 'util';
+import { fileURLToPath } from 'url';
+
+const pump = util.promisify(pipeline);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const UPLOAD_DIR = path.join(__dirname, '../../../uploads');
+
+// Asegurar que directorio existe
+if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
 // ============================================
 // CRUD para Catálogo de Prerrequisitos (Admin)
@@ -44,7 +59,7 @@ export const createEstudiantePrerequisito = async (request: FastifyRequest, repl
     const usuario = request.user as any;
 
     try {
-        // Verificar si ya existe
+        // Verificar si ya existe el registro:
         const existente = await prisma.estudiantePrerequisito.findUnique({
             where: {
                 fkEstudiante_prerequisitoId: {
@@ -64,26 +79,27 @@ export const createEstudiantePrerequisito = async (request: FastifyRequest, repl
                     }
                 },
                 data: {
-                    archivoUrl,
-                    cumplido: false // Reset a false hasta que director valide
+                    archivoUrl: archivoUrl,
+                    cumplido: false, // Reset a false hasta que el director valide
+                    fechaActualizacion: new Date()
                 }
             });
             return reply.code(200).send(actualizado);
         } else {
-            // Crear nuevo
-            const nuevoPrerequisito = await prisma.estudiantePrerequisito.create({
+            // Crear uno nuevo si no existe
+            const nuevo = await prisma.estudiantePrerequisito.create({
                 data: {
-                    prerequisitoId: Number(prerequisitoId),
                     fkEstudiante: usuario.id,
-                    archivoUrl,
+                    prerequisitoId: Number(prerequisitoId),
+                    archivoUrl: archivoUrl,
                     cumplido: false
                 }
             });
-            return reply.code(201).send(nuevoPrerequisito);
+            return reply.code(201).send(nuevo);
         }
     } catch (error) {
         request.log.error(error);
-        return reply.code(500).send({ message: 'Error subiendo prerrequisito' });
+        return reply.code(500).send({ message: 'Error al procesar el prerrequisito' });
     }
 };
 
@@ -100,17 +116,49 @@ export const getEstudiantePrerequisitos = async (request: FastifyRequest, reply:
             fkEstudiante = Number(estudianteId);
         }
 
-        const prerequisitos = await prisma.estudiantePrerequisito.findMany({
+        // 1. Obtener catálogo activo
+        const catalogo = await prisma.catalogoPrerequisito.findMany({
+            where: { activo: true },
+            orderBy: { orden: 'asc' }
+        });
+
+        // 2. Obtener lo que el estudiante ha subido
+        const misPrerequisitos = await prisma.estudiantePrerequisito.findMany({
             where: { fkEstudiante },
             include: {
-                prerequisito: true,
-                estudiante: {
-                    select: { nombres: true, apellidos: true, cedula: true }
-                }
+                prerequisito: true
             }
         });
 
-        return prerequisitos;
+        // 3. Combinar para mostrar estado completo
+        const resultado = catalogo.map(req => {
+            const envio = misPrerequisitos.find(p => p.prerequisitoId === req.id);
+
+            // Determinar código para el frontend
+            let codigo = 'other';
+            const n = req.nombre.toLowerCase();
+            if (n.includes('ingl')) codigo = 'english';
+            else if (n.includes('vincula')) codigo = 'community';
+            else if (n.includes('ctica') || n.includes('practica')) codigo = 'internship';
+
+            return {
+                id: req.id, // ID del requisito (del catálogo)
+                nombre: req.nombre,
+                codigo: codigo, // Clave para el frontend
+                descripcion: req.descripcion,
+                orden: req.orden,
+                // Estado del estudiante
+                estudiantePrerequisitoId: envio ? envio.id : null,
+                entregado: !!envio,
+                cumplido: envio ? envio.cumplido : false,
+                archivoUrl: envio ? envio.archivoUrl : null,
+                fechaCumplimiento: envio ? envio.fechaCumplimiento : null,
+                fechaActualizacion: envio ? envio.fechaActualizacion : null,
+                observaciones: envio ? 'En revisión' : 'Pendiente'
+            };
+        });
+
+        return resultado;
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo prerrequisitos' });
@@ -180,6 +228,7 @@ export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: 
                         malla: true
                     }
                 },
+
                 prerequisitos: {
                     include: {
                         prerequisito: true
@@ -214,6 +263,7 @@ export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: 
                 cedula: estudiante.cedula,
                 career: estudiante.estudiantePerfil?.escuela || 'N/A',
                 malla: estudiante.estudiantePerfil?.malla || 'N/A',
+
                 prerequisitos: requisitos,
                 accessGranted,
                 totalRequisitos: catalogo.length,
@@ -265,27 +315,10 @@ export const checkCanCreatePropuesta = async (request: FastifyRequest, reply: Fa
         return reply.code(500).send({ message: 'Error verificando prerrequisitos' });
     }
 };
+
 // ============================================
 // Manejo de Archivos (Subida y Descarga)
 // ============================================
-
-import fs from 'fs';
-import path from 'path';
-import { pipeline } from 'stream';
-import util from 'util';
-import { fileURLToPath } from 'url';
-
-const pump = util.promisify(pipeline);
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-// Ajustar ruta para salir de dist/src/controllers si es necesario
-// Asumimos root del proyecto para 'uploads'
-const UPLOAD_DIR = path.join(__dirname, '../../../uploads');
-
-// Asegurar que directorio existe
-if (!fs.existsSync(UPLOAD_DIR)) {
-    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
 
 export const uploadPrerequisitoFile = async (request: FastifyRequest, reply: FastifyReply) => {
     try {

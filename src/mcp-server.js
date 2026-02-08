@@ -258,7 +258,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const { auth_token } = request.params.arguments;
 
             if (!auth_token) {
-                return { content: [{ type: "text", text: "Error: sw requiere auth_token." }] };
+                return { content: [{ type: "text", text: "Error: se requiere auth_token." }] };
             }
 
             // 1. Validar Token y obtener Email
@@ -275,7 +275,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             // 2. Obtener datos reales del usuario basado en el email
             const [users] = await connection.execute(
-                "SELECT id, rol, nombres FROM usuarios WHERE correo_institucional = ?",
+                "SELECT id, rol, nombres, cedula FROM usuarios WHERE correo_institucional = ?",
                 [email]
             );
 
@@ -284,29 +284,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             const usuario = users[0];
-            const rol_real = usuario.rol; // 'DIRECTOR', 'ESTUDIANTE', etc.
-            const usuario_id_real = usuario.id;
 
-            console.error(`[MCP] Autenticado: ${email} -> Rol=${rol_real}, ID=${usuario_id_real}`);
+            // Solo permitir estudiantes por ahora con este set de vistas
+            if (usuario.rol !== 'ESTUDIANTE') {
+                // Fallback o manejo para otros roles si fuera necesario
+            }
+
+            console.error(`[MCP] Autenticado: ${email} -> Rol=${usuario.rol}, ID=${usuario.id}, Cedula=${usuario.cedula}`);
 
             try {
-                // A. Context Setting RLS
-                await connection.execute("SET @app_current_role = ?", [rol_real]);
-                await connection.execute("SET @app_current_user_id = ?", [usuario_id_real]);
+                // A. Context Setting RLS (Usando la cédula para el estudiante)
+                await connection.execute("SET @student_cedula = ?", [usuario.cedula]);
 
-                // B. Consultas Inteligentes
-                const [propuestas] = await connection.execute("SELECT * FROM v_propuestas_rls");
-                const [actividades] = await connection.execute("SELECT * FROM v_actividades_rls");
-                const [perfil] = await connection.execute("SELECT * FROM v_usuarios_rls WHERE id = ?", [usuario_id_real]);
+                // B. Consultas a las Vistas RLS de Estudiante
+                const [perfil] = await connection.execute("SELECT * FROM v_perfil_estudiante");
+                const [propuestas] = await connection.execute("SELECT * FROM v_propuestas_estudiante");
+                const [actividades] = await connection.execute("SELECT * FROM v_actividades_estudiante");
+                const [pendientes] = await connection.execute("SELECT * FROM v_tareas_pendientes_estudiante");
+                const [avances] = await connection.execute("SELECT * FROM v_avances_estudiante LIMIT 5");
 
                 return {
                     content: [{
                         type: "text",
                         text: JSON.stringify({
-                            mensaje: `Bienvenido ${usuario.nombres} (${rol_real})`,
+                            mensaje: `Bienvenido Estudiante ${usuario.nombres}`,
                             perfil: perfil[0],
-                            propuestas_visibles: propuestas,
-                            actividades_asociadas: actividades
+                            propuestas: propuestas,
+                            actividades_resumen: actividades,
+                            tareas_pendientes: pendientes,
+                            ultimos_avances: avances
                         }, null, 2)
                     }]
                 };
@@ -335,9 +341,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // 2. Obtener usuarios
-            // Nota: En un entorno real, aquí validaríamos permisos (ej. solo Coordinadores/Directores)
             const [users] = await connection.execute(
-                "SELECT id, nombres, apellidos, correo_institucional, rol, estado FROM usuarios ORDER BY apellidos ASC"
+                "SELECT id, nombres, apellidos, correo_institucional, rol FROM usuarios ORDER BY apellidos ASC"
             );
 
             return {

@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import { FastifyReply, FastifyRequest } from 'fastify';
 
+
 export const getUsuarios = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { rol } = request.query as { rol?: string };

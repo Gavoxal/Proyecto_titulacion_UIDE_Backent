@@ -15,7 +15,9 @@ export default async function (fastify: FastifyInstance, opts: any) {
             id: { type: 'integer' },
             tipo: { type: 'string' },
             urlArchivo: { type: 'string' },
-            fechaSubida: { type: 'string', format: 'date-time' }
+            fechaSubida: { type: 'string', format: 'date-time' },
+            version: { type: 'integer' },
+            isActive: { type: 'boolean' }
         }
     };
 
@@ -24,16 +26,9 @@ export default async function (fastify: FastifyInstance, opts: any) {
         schema: {
             tags: ['Entregables Finales'],
             description: 'Subir entregable final (Tesis, Manual, etc.)',
+            consumes: ['multipart/form-data'],
             security: [{ bearerAuth: [] }],
-            body: {
-                type: 'object',
-                required: ['tipo', 'urlArchivo', 'propuestasId'],
-                properties: {
-                    tipo: { type: 'string', enum: ['TESIS', 'MANUAL_USUARIO', 'REPOSITORIO', 'ARTICULO'] },
-                    urlArchivo: { type: 'string' },
-                    propuestasId: { type: 'integer' }
-                }
-            }
+            // Removed strict body validation to allow multipart processing in controller
         },
         preHandler: async (request: any, reply: any) => {
             const user = request.user;
@@ -52,6 +47,12 @@ export default async function (fastify: FastifyInstance, opts: any) {
             params: {
                 type: 'object',
                 properties: { propuestaId: { type: 'integer' } }
+            },
+            querystring: {
+                type: 'object',
+                properties: {
+                    history: { type: 'string', description: 'Set "true" to see history' }
+                }
             },
             response: {
                 200: {

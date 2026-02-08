@@ -9,7 +9,11 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
         // 1. Buscar credenciales en Auth
         const auth = await prisma.auth.findUnique({
             where: { username: correo },
-            include: { usuario: true }
+            include: {
+                usuario: {
+                    include: { estudiantePerfil: true }
+                }
+            }
         });
 
         if (!auth || !auth.usuario) {
@@ -31,7 +35,17 @@ export const login = async (request: FastifyRequest, reply: FastifyReply) => {
             nombre: `${usuario.nombres} ${usuario.apellidos}`
         });
 
-        return { token, usuario: { id: usuario.id, nombre: usuario.nombres, rol: usuario.rol } };
+        return {
+            token,
+            usuario: {
+                id: usuario.id,
+                nombres: usuario.nombres,
+                apellidos: usuario.apellidos,
+                correoInstitucional: usuario.correoInstitucional,
+                rol: usuario.rol,
+                perfil: usuario.estudiantePerfil
+            }
+        };
 
     } catch (error) {
         request.log.error(error);
