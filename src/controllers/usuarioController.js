@@ -111,3 +111,128 @@ export const deleteUsuario = async (request, reply) => {
         return reply.code(500).send({ message: 'Error eliminando usuario' });
     }
 };
+
+/**
+ * Carga masiva de usuarios
+ * POST /api/v1/usuarios/bulk
+ */
+export const bulkCreateUsuarios = async (request, reply) => {
+    console.log('🚀 Iniciando bulkCreateUsuarios');
+    const prisma = request.server.prisma;
+    const { usuarios } = request.body; // Array de usuarios
+
+    if (!Array.isArray(usuarios) || usuarios.length === 0) {
+        return reply.code(400).send({
+            message: 'Se requiere un array de usuarios no vacío'
+        });
+    }
+
+    const resultados = {
+        exitosos: [],
+        fallidos: [],
+        total: usuarios.length
+    };
+
+    try {
+        for (const usuario of usuarios) {
+            try {
+                const { cedula, nombres, apellidos, correo, clave, rol, perfil } = usuario;
+
+                // Validar campos requeridos
+                if (!cedula || !nombres || !apellidos || !correo || !clave) {
+                    resultados.fallidos.push({
+                        usuario,
+                        error: 'Campos requeridos faltantes'
+                    });
+                    continue;
+                }
+
+                // Verificar si ya existe
+                const existente = await prisma.usuario.findFirst({
+                    where: {
+                        OR: [
+                            { cedula },
+                            { correoInstitucional: correo }
+                        ]
+                    }
+                });
+
+                if (existente) {
+                    resultados.fallidos.push({
+                        usuario,
+                        error: 'Cédula o correo ya registrado'
+                    });
+                    continue;
+                }
+
+                // Crear usuario con perfil y auth
+                const hashedPassword = await bcrypt.hash(clave, 10);
+
+                // Preparar datos de creación
+                const createData = {
+                    cedula,
+                    nombres,
+                    apellidos,
+                    correoInstitucional: correo,
+                    rol: rol || 'ESTUDIANTE',
+                    auth: {
+                        create: {
+                            username: correo, // Usar correo como username
+                            password: hashedPassword
+                        }
+                    }
+                };
+
+                // Si es estudiante y tiene perfil, agregar relación
+                if ((!rol || rol === 'ESTUDIANTE') && perfil) {
+                    createData.estudiantePerfil = {
+                        create: {
+                            sexo: perfil.sexo,
+                            estadoEscuela: perfil.estadoEscuela,
+                            sede: perfil.sede,
+                            escuela: perfil.escuela,
+                            codigoMalla: perfil.codigoMalla,
+                            malla: perfil.malla,
+                            periodoLectivo: perfil.periodoLectivo,
+                            ciudad: perfil.ciudad,
+                            provincia: perfil.provincia,
+                            pais: perfil.pais
+                        }
+                    };
+                }
+
+                const nuevoUsuario = await prisma.usuario.create({
+                    data: createData,
+                    select: {
+                        id: true,
+                        cedula: true,
+                        nombres: true,
+                        apellidos: true,
+                        correoInstitucional: true,
+                        rol: true
+                    }
+                });
+
+                resultados.exitosos.push(nuevoUsuario);
+            } catch (error) {
+                resultados.fallidos.push({
+                    usuario,
+                    error: error.message || 'Error desconocido'
+                });
+            }
+        }
+
+        return reply.code(201).send({
+            message: `Procesados ${resultados.total} usuarios`,
+            exitosos: resultados.exitosos.length,
+            fallidos: resultados.fallidos.length,
+            detalles: resultados
+        });
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({
+            message: 'Error en carga masiva',
+            error: error.message
+        });
+    }
+};

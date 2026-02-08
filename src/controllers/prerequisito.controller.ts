@@ -174,6 +174,12 @@ export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: 
                 nombres: true,
                 apellidos: true,
                 cedula: true,
+                estudiantePerfil: {
+                    select: {
+                        escuela: true,
+                        malla: true
+                    }
+                },
                 prerequisitos: {
                     include: {
                         prerequisito: true
@@ -206,6 +212,8 @@ export const getPrerequisitosDashboard = async (request: FastifyRequest, reply: 
                 id: estudiante.id,
                 name: `${estudiante.nombres} ${estudiante.apellidos}`,
                 cedula: estudiante.cedula,
+                career: estudiante.estudiantePerfil?.escuela || 'N/A',
+                malla: estudiante.estudiantePerfil?.malla || 'N/A',
                 prerequisitos: requisitos,
                 accessGranted,
                 totalRequisitos: catalogo.length,
@@ -256,4 +264,78 @@ export const checkCanCreatePropuesta = async (request: FastifyRequest, reply: Fa
         request.log.error(error);
         return reply.code(500).send({ message: 'Error verificando prerrequisitos' });
     }
+};
+// ============================================
+// Manejo de Archivos (Subida y Descarga)
+// ============================================
+
+import fs from 'fs';
+import path from 'path';
+import { pipeline } from 'stream';
+import util from 'util';
+import { fileURLToPath } from 'url';
+
+const pump = util.promisify(pipeline);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// Ajustar ruta para salir de dist/src/controllers si es necesario
+// Asumimos root del proyecto para 'uploads'
+const UPLOAD_DIR = path.join(__dirname, '../../../uploads');
+
+// Asegurar que directorio existe
+if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+export const uploadPrerequisitoFile = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+        const data = await request.file();
+
+        if (!data) {
+            return reply.code(400).send({ message: 'No se subió ningún archivo' });
+        }
+
+        const filename = `${Date.now()}-${data.filename.replace(/\s/g, '_')}`;
+        const filepath = path.join(UPLOAD_DIR, filename);
+
+        await pump(data.file, fs.createWriteStream(filepath));
+
+        // URL relativa para servir el archivo
+        const fileUrl = `/api/v1/prerequisitos/file/${filename}`;
+
+        return reply.code(200).send({
+            message: 'Archivo subido correctamente',
+            url: fileUrl,
+            filename: filename
+        });
+
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error subiendo archivo' });
+    }
+};
+
+export const servePrerequisitoFile = async (request: FastifyRequest, reply: FastifyReply) => {
+    const { filename } = request.params as any;
+    const filepath = path.join(UPLOAD_DIR, filename);
+
+    // Seguridad básica path traversal
+    if (!filepath.startsWith(UPLOAD_DIR)) {
+        return reply.code(403).send({ message: 'Acceso denegado' });
+    }
+
+    if (!fs.existsSync(filepath)) {
+        return reply.code(404).send({ message: 'Archivo no encontrado' });
+    }
+
+    const stream = fs.createReadStream(filepath);
+    const ext = path.extname(filename).toLowerCase();
+
+    let contentType = 'application/octet-stream';
+    if (ext === '.pdf') contentType = 'application/pdf';
+    else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+    else if (ext === '.png') contentType = 'image/png';
+
+    reply.header('Content-Type', contentType);
+    return reply.send(stream);
 };

@@ -3,7 +3,8 @@ import {
     getUsuarioById,
     createUsuario,
     updateUsuario,
-    deleteUsuario
+    deleteUsuario,
+    bulkCreateUsuarios
 } from '../../controllers/usuarioController.js';
 
 export default async function (fastify, opts) {
@@ -78,6 +79,48 @@ export default async function (fastify, opts) {
             }
         }
     }, createUsuario);
+
+    // POST /bulk (Carga masiva)
+    fastify.post('/bulk', {
+        schema: {
+            description: 'Carga masiva de usuarios',
+            tags: ['Usuarios'],
+            security: [{ apiKey: [] }],
+            body: {
+                type: 'object',
+                required: ['usuarios'],
+                properties: {
+                    usuarios: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['cedula', 'nombres', 'apellidos', 'correo', 'clave'],
+                            properties: {
+                                cedula: { type: 'string' },
+                                nombres: { type: 'string' },
+                                apellidos: { type: 'string' },
+                                correo: { type: 'string', format: 'email' },
+                                clave: { type: 'string' },
+                                rol: { type: 'string' }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        preHandler: async (request, reply) => {
+            const user = request.user;
+            if (!['DIRECTOR', 'COORDINADOR'].includes(user.rol)) {
+                return reply.code(403).send({
+                    message: 'Solo directores y coordinadores pueden realizar carga masiva'
+                });
+            }
+        }
+    }, (request, reply) => {
+        console.log('📌 Recibida petición POST /bulk');
+        return bulkCreateUsuarios(request, reply);
+    });
+    console.log('✅ Ruta POST /api/v1/usuarios/bulk registrada');
 
     // PUT /:id (Actualizar)
     fastify.put('/:id', {

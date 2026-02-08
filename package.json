@@ -9,7 +9,7 @@
     "dev": "tsx watch src/app.ts",
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio",
-    "db:seed": "node prisma/seed.js",
+    "db:seed": "tsx prisma/seed.ts",
     "mcp": "node src/mcp-server.js"
   },
   "keywords": [],

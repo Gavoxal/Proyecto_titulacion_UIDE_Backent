@@ -3,7 +3,8 @@ import {
     getUsuarioById,
     createUsuario,
     updateUsuario,
-    deleteUsuario
+    deleteUsuario,
+    bulkCreateUsuarios
 } from '../../controllers/usuario.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -21,7 +22,21 @@ export default async function (fastify: FastifyInstance, opts: any) {
             nombres: { type: 'string' },
             apellidos: { type: 'string' },
             correoInstitucional: { type: 'string', format: 'email' },
-            rol: { type: 'string' }
+            rol: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+            estudiantePerfil: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                    id: { type: 'integer' },
+                    sexo: { type: 'string' },
+                    escuela: { type: 'string' },
+                    sede: { type: 'string' },
+                    malla: { type: 'string' },
+                    ciudad: { type: 'string' },
+                    estadoEscuela: { type: 'string' }
+                }
+            }
         }
     };
 
@@ -86,6 +101,44 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, createUsuario);
+
+    // POST /bulk (Carga masiva)
+    fastify.post('/bulk', {
+        schema: {
+            description: 'Carga masiva de usuarios',
+            tags: ['Usuarios'],
+            security: [{ bearerAuth: [] }],
+            body: {
+                type: 'object',
+                required: ['usuarios'],
+                properties: {
+                    usuarios: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['cedula', 'nombres', 'apellidos', 'correo', 'clave'],
+                            properties: {
+                                cedula: { type: 'string' },
+                                nombres: { type: 'string' },
+                                apellidos: { type: 'string' },
+                                correo: { type: 'string', format: 'email' },
+                                clave: { type: 'string' },
+                                rol: { type: 'string' }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        preHandler: async (request: any, reply: any) => {
+            const user = request.user as any;
+            if (!['DIRECTOR', 'COORDINADOR'].includes(user.rol)) {
+                return reply.code(403).send({
+                    message: 'Solo directores y coordinadores pueden realizar carga masiva'
+                });
+            }
+        }
+    }, bulkCreateUsuarios);
 
     // PUT /:id (Actualizar)
     fastify.put('/:id', {

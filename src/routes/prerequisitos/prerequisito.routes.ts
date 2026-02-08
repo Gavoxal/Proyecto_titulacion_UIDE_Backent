@@ -1,9 +1,11 @@
 import {
-    createPrerequisito,
-    getPrerequisitos,
+    createEstudiantePrerequisito,
+    getEstudiantePrerequisitos,
     validatePrerequisito,
-    deletePrerequisito,
-    getPrerequisitosDashboard
+    deleteEstudiantePrerequisito,
+    getPrerequisitosDashboard,
+    uploadPrerequisitoFile,
+    servePrerequisitoFile
 } from '../../controllers/prerequisito.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -36,10 +38,9 @@ export default async function (fastify: FastifyInstance, opts: any) {
             security: [{ bearerAuth: [] }],
             body: {
                 type: 'object',
-                required: ['nombre', 'archivoUrl'],
+                required: ['prerequisitoId', 'archivoUrl'],
                 properties: {
-                    nombre: { type: 'string', enum: ['CERTIFICADO_INGLES', 'MALLA_CURRICULAR', 'PRACTICAS_PREPROFESIONALES', 'VINCULACION'] },
-                    descripcion: { type: 'string' },
+                    prerequisitoId: { type: 'integer' },
                     archivoUrl: { type: 'string' }
                 }
             }
@@ -50,7 +51,7 @@ export default async function (fastify: FastifyInstance, opts: any) {
                 return reply.code(403).send({ message: 'Solo estudiantes suben prerrequisitos' });
             }
         }
-    }, createPrerequisito);
+    }, createEstudiantePrerequisito);
 
     // GET /dashboard (Dashboard de Cumplimiento)
     fastify.get('/dashboard', {
@@ -84,7 +85,7 @@ export default async function (fastify: FastifyInstance, opts: any) {
                 }
             }
         }
-    }, getPrerequisitos);
+    }, getEstudiantePrerequisitos);
 
     // PUT /:id/validate (Validar - Director/Coordinador)
     fastify.put('/:id/validate', {
@@ -131,6 +132,38 @@ export default async function (fastify: FastifyInstance, opts: any) {
                 // TODO: Verificar que sea SU prerrequisito.
             }
         }
-    }, deletePrerequisito);
+    }, deleteEstudiantePrerequisito);
+
+    // POST /upload (Subir documento físico)
+    fastify.post('/upload', {
+        schema: {
+            tags: ['Prerrequisitos'],
+            description: 'Subir archivo de prerrequisito (PDF/Imagen)',
+            security: [{ bearerAuth: [] }],
+            consumes: ['multipart/form-data'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        message: { type: 'string' },
+                        url: { type: 'string' },
+                        filename: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, uploadPrerequisitoFile);
+
+    // GET /file/:filename (Servir archivo)
+    fastify.get('/file/:filename', {
+        schema: {
+            tags: ['Prerrequisitos'],
+            description: 'Obtener archivo de prerrequisito',
+            params: {
+                type: 'object',
+                properties: { filename: { type: 'string' } }
+            }
+        }
+    }, servePrerequisitoFile);
 
 }

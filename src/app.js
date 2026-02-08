@@ -66,9 +66,14 @@ await app.register((await import('./plugins/jwt.js')).default);
 // Routes
 await app.register((await import('./routes/auth/index.js')).default, { prefix: '/api/v1/auth' });
 await app.register((await import('./routes/usuarios/index.js')).default, { prefix: '/api/v1/usuarios' });
-
-
-
+await app.register((await import('./routes/propuestas/propuesta.routes.ts')).default, { prefix: '/api/v1/propuestas' });
+await app.register((await import('./routes/prerequisitos/prerequisito.routes.ts')).default, { prefix: '/api/v1/prerequisitos' });
+await app.register((await import('./routes/actividades/actividad.routes.ts')).default, { prefix: '/api/v1/actividades' });
+await app.register((await import('./routes/votacion/votacion.routes.ts')).default, { prefix: '/api/v1/votaciones' });
+await app.register((await import('./routes/trabajos/trabajoTitulacion.routes.ts')).default, { prefix: '/api/v1/trabajos-titulacion' });
+await app.register((await import('./routes/comentarios/comentario.routes.ts')).default, { prefix: '/api/v1/comentarios' });
+await app.register((await import('./routes/comite/comite.routes.ts')).default, { prefix: '/api/v1/comites' });
+await app.register((await import('./routes/bitacora/bitacora.routes.ts')).default, { prefix: '/api/v1/bitacora' });
 
 // Basic Route
 app.get('/', async (request, reply) => {
