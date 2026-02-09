@@ -55,14 +55,8 @@ export default async function (fastify: FastifyInstance, opts: any) {
             tags: ['Prerrequisitos'],
             description: 'Subir prerrequisito (Estudiante)',
             security: [{ bearerAuth: [] }],
-            body: {
-                type: 'object',
-                required: ['prerequisitoId'],
-                properties: {
-                    prerequisitoId: { type: 'integer' },
-                    archivoUrl: { type: ['string', 'null'] }
-                }
-            }
+            // Quitamos validación estricta de body para soportar tanto JSON como Multipart
+            // La validación se hace en el controlador
         },
         preHandler: async (request: any, reply: any) => {
             const user = request.user;

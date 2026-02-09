@@ -112,6 +112,23 @@ export const createReunion = async (request: FastifyRequest, reply: FastifyReply
             }
         });
 
+        // NOTIFICACIÓN: Al Estudiante
+        try {
+            if (estudianteId) {
+                // Formatear fecha para el mensaje
+                const fechaStr = new Date(fecha).toLocaleDateString();
+                await prisma.notificacion.create({
+                    data: {
+                        usuarioId: Number(estudianteId),
+                        mensaje: `El tutor ha agendado una nueva reunión: ${motivo} - ${fechaStr} ${horaInicio}`,
+                        leido: false
+                    }
+                });
+            }
+        } catch (notifError) {
+            console.error('Error enviando notificación de reunión al estudiante:', notifError);
+        }
+
         return reply.code(201).send(nuevaReunion);
     } catch (error) {
         request.log.error(error);

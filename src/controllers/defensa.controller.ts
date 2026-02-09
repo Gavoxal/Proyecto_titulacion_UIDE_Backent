@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { sendDefenseNotificationEmail } from '../services/email.service';
+import { sendDefenseNotificationEmail } from '../services/email.service.js';
 
 /**
  * DEFENSAS (PRIVADA Y PÚBLICA)

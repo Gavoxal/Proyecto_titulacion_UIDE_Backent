@@ -57,10 +57,56 @@ export const createCatalogoPrerequisito = async (request: FastifyRequest, reply:
 
 export const createEstudiantePrerequisito = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
-    const { prerequisitoId, archivoUrl } = request.body as any;
     const userAuth = request.user as any;
 
+    let prerequisitoId: any;
+    let archivoUrl: string | null = null;
+
     try {
+        console.log('[DEBUG] createEstudiantePrerequisito: Start');
+        if (request.isMultipart()) {
+            console.log('[DEBUG] Processing multipart request');
+            const data = await request.file();
+            if (!data) {
+                console.log('[DEBUG] No file data received');
+                return reply.code(400).send({ message: 'No se recibió información en la petición' });
+            }
+
+            // Log fields to see what we got
+            console.log('[DEBUG] Fields received:', data.fields);
+
+            // Intentar extraer prerequisitoId de varias formas posibles
+            if (data.fields.prerequisitoId) {
+                const field = data.fields.prerequisitoId as any;
+                prerequisitoId = field.value;
+            }
+
+            console.log(`[DEBUG] Extracted prerequisitoId: ${prerequisitoId}`);
+
+            if (data.file && data.filename) {
+                console.log(`[DEBUG] Handling file: ${data.filename}`);
+                const filename = `${Date.now()}-${data.filename.replace(/\s/g, '_')}`;
+                const filepath = path.join(UPLOAD_DIR, filename);
+                await pump(data.file, fs.createWriteStream(filepath));
+                archivoUrl = `/api/v1/prerequisitos/file/${filename}`;
+                console.log(`[DEBUG] File saved at: ${archivoUrl}`);
+            } else {
+                console.log('[DEBUG] No file found in multipart data');
+            }
+        } else {
+            console.log('[DEBUG] Processing JSON request');
+            const body = request.body as any;
+            prerequisitoId = body.prerequisitoId;
+            archivoUrl = body.archivoUrl;
+        }
+
+        console.log(`[DEBUG] Final prerequisitoId: ${prerequisitoId}`);
+
+        if (!prerequisitoId) {
+            console.error('[ERROR] prerequisitoId is missing');
+            return reply.code(400).send({ message: 'prerequisitoId es requerido' });
+        }
+
         // Fetch complete user info to get names
         const usuario = await prisma.usuario.findUnique({
             where: { id: userAuth.id }
@@ -96,16 +142,20 @@ export const createEstudiantePrerequisito = async (request: FastifyRequest, repl
                     }
                 },
                 data: {
-                    archivoUrl: archivoUrl,
+                    archivoUrl: archivoUrl || existente.archivoUrl, // Mantener anterior si no viene nuevo
                     cumplido: false // Reset a false hasta que el director valide
                 }
             });
 
             // Notificar al director sobre la actualización
-            await notifyDirector(
-                prisma,
-                `${usuario.nombres} ${usuario.apellidos} ha actualizado el prerequisito: ${catalogoPrereq?.nombre || 'Prerequisito'}`
-            );
+            try {
+                await notifyDirector(
+                    prisma,
+                    `${usuario.nombres} ${usuario.apellidos} ha actualizado el prerequisito: ${catalogoPrereq?.nombre || 'Prerequisito'}`
+                );
+            } catch (notifError) {
+                console.error('[ERROR] Failed to notify director:', notifError);
+            }
 
             return reply.code(200).send(resultado);
         } else {
@@ -120,16 +170,21 @@ export const createEstudiantePrerequisito = async (request: FastifyRequest, repl
             });
 
             // Notificar al director sobre el nuevo prerequisito
-            await notifyDirector(
-                prisma,
-                `${usuario.nombres} ${usuario.apellidos} ha enviado el prerequisito: ${catalogoPrereq?.nombre || 'Prerequisito'} para revisión`
-            );
+            try {
+                await notifyDirector(
+                    prisma,
+                    `${usuario.nombres} ${usuario.apellidos} ha enviado el prerequisito: ${catalogoPrereq?.nombre || 'Prerequisito'} para revisión`
+                );
+            } catch (notifError) {
+                console.error('[ERROR] Failed to notify director:', notifError);
+            }
 
             return reply.code(201).send(resultado);
         }
     } catch (error) {
         request.log.error(error);
-        return reply.code(500).send({ message: 'Error al procesar el prerrequisito' });
+        console.error('[ERROR] createEstudiantePrerequisito failed:', error);
+        return reply.code(500).send({ message: 'Error al procesar el prerrequisito', error: (error as Error).message });
     }
 };
 

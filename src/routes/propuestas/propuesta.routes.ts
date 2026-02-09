@@ -13,7 +13,13 @@ import { FastifyInstance } from 'fastify';
 
 export default async function (fastify: FastifyInstance, opts: any) {
 
-    fastify.addHook('onRequest', fastify.authenticate);
+    fastify.addHook('onRequest', async (request, reply) => {
+        // Permitir acceso público a archivos
+        if (request.url && request.url.includes('/file/')) {
+            return;
+        }
+        return fastify.authenticate(request, reply);
+    });
 
     const propuestaSchema = {
         type: 'object',
@@ -38,7 +44,9 @@ export default async function (fastify: FastifyInstance, opts: any) {
                         nullable: true,
                         properties: {
                             escuela: { type: 'string' },
-                            carrera: { type: 'string' }
+                            carrera: { type: 'string' },
+                            malla: { type: 'string', nullable: true },
+                            periodoLectivo: { type: 'string', nullable: true }
                         }
                     }
                 }

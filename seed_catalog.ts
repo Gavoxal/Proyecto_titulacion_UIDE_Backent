@@ -33,14 +33,21 @@ async function main() {
 async function run() {
     const prerequisitos = [
         { nombre: 'CERTIFICADO_INGLES', descripcion: 'Certificado de suficiencia de inglés', orden: 1 },
-        { nombre: 'MALLA_CURRICULAR', descripcion: 'Malla curricular completa', orden: 2 },
         { nombre: 'PRACTICAS_PREPROFESIONALES', descripcion: 'Certificado de prácticas preprofesionales', orden: 3 },
         { nombre: 'VINCULACION', descripcion: 'Certificado de vinculación con la sociedad', orden: 4 }
     ];
 
+    // Limpiar catálogo existente para asegurar que solo queden los necesarios
+    console.log('Limpiando catálogo antiguo...');
+    await prisma.catalogoPrerequisito.deleteMany({
+        where: {
+            nombre: {
+                notIn: prerequisitos.map(p => p.nombre)
+            }
+        }
+    });
+
     for (const req of prerequisitos) {
-        // We use findFirst because 'nombre' is not marked unique in schema shown earlier (or is it 'codigo'?). 
-        // Schema showed 'nombre' but not unique.
         const existing = await prisma.catalogoPrerequisito.findFirst({
             where: { nombre: req.nombre }
         });
@@ -56,7 +63,16 @@ async function run() {
             });
             console.log(`Created: ${req.nombre}`);
         } else {
-            console.log(`Already exists: ${req.nombre}`);
+            // Actualizar por si acaso cambió la descripción u orden
+            await prisma.catalogoPrerequisito.update({
+                where: { id: existing.id },
+                data: {
+                    descripcion: req.descripcion,
+                    orden: req.orden,
+                    activo: true
+                }
+            });
+            console.log(`Updated/Verified: ${req.nombre}`);
         }
     }
 }

@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { sendCredentialsEmail } from '../services/email.service';
+import { sendCredentialsEmail } from '../services/email.service.js';
 import * as fs from 'fs';
 import * as path from 'path';
 

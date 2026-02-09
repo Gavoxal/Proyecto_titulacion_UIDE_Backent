@@ -1,0 +1,2 @@
+src/controllers/defensa.controller.ts(2,46): error TS2307: Cannot find module '../services/email.service' or its corresponding type declarations.
+src/controllers/usuario.controller.ts(3,38): error TS2307: Cannot find module '../services/email.service' or its corresponding type declarations.

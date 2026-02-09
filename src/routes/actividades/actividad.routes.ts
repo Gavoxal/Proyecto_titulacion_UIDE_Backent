@@ -20,7 +20,13 @@ import { FastifyInstance } from 'fastify';
 
 export default async function (fastify: FastifyInstance, opts: any) {
 
-    fastify.addHook('onRequest', fastify.authenticate);
+    fastify.addHook('onRequest', async (request, reply) => {
+        // Permitir acceso público a archivos de evidencias
+        if (request.url && request.url.includes('/evidencias/file/')) {
+            return;
+        }
+        return fastify.authenticate(request, reply);
+    });
 
     // Esquemas
     const actividadSchema = {

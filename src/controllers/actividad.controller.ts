@@ -26,7 +26,7 @@ export const uploadEvidenciaFile = async (request: FastifyRequest, reply: Fastif
 
         // Usar la ruta correcta relativa a este archivo en controllers
         // src/controllers/actividad.controller.ts -> ../../uploads/evidencias
-        const uploadDir = path.join(__dirname, '../../../uploads/evidencias');
+        const uploadDir = path.join(__dirname, '../../uploads/evidencias');
 
         if (!fs.existsSync(uploadDir)) {
             console.log(`Creando directorio de uploads: ${uploadDir}`);
@@ -101,6 +101,28 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
                 estado: 'NO_ENTREGADO' // Default state
             }
         });
+
+        // NOTIFICACIÓN: Al Estudiante
+        try {
+            const propuesta = await prisma.propuesta.findUnique({
+                where: { id: Number(propuestaId) },
+                select: { fkEstudiante: true }
+            });
+
+            if (propuesta && propuesta.fkEstudiante) {
+                await prisma.notificacion.create({
+                    data: {
+                        usuarioId: propuesta.fkEstudiante,
+                        mensaje: `El tutor ha creado una nueva actividad: ${nombre}`,
+                        leido: false
+                    }
+                });
+            }
+        } catch (notifError) {
+            console.error('Error enviando notificación al estudiante:', notifError);
+            // No bloqueamos la respuesta si falla la notificación
+        }
+
         return reply.code(201).send(nuevaActividad);
     } catch (error) {
         request.log.error(error);
@@ -242,6 +264,54 @@ export const createEvidencia = async (request: FastifyRequest, reply: FastifyRep
             where: { id: Number(actividadId) },
             data: { estado: 'ENTREGADO' }
         });
+
+        // NOTIFICACIÓN: Al Tutor
+        try {
+            // Buscamos el tutor a través de Actividad -> Propuesta -> TrabajoTitulacion
+            const actividad = await prisma.actividad.findUnique({
+                where: { id: Number(actividadId) },
+                include: {
+                    propuesta: {
+                        include: {
+                            trabajosTitulacion: {
+                                where: { estadoAsignacion: 'ACTIVO' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Fetch student details from DB to ensure we have the name
+            let estudianteNombre = 'El estudiante';
+            if (usuario && usuario.id) {
+                const estudianteDb = await prisma.usuario.findUnique({
+                    where: { id: Number(usuario.id) },
+                    select: { nombres: true, apellidos: true }
+                });
+                if (estudianteDb) {
+                    estudianteNombre = `${estudianteDb.nombres} ${estudianteDb.apellidos}`;
+                }
+            }
+
+            const actividadNombre = actividad?.nombre || 'la actividad';
+
+            const tutores = actividad?.propuesta?.trabajosTitulacion || [];
+
+            for (const trabajo of tutores) {
+                if (trabajo.fkTutorId) {
+                    await prisma.notificacion.create({
+                        data: {
+                            usuarioId: trabajo.fkTutorId,
+                            mensaje: `${estudianteNombre} ha entregado una evidencia en: ${actividadNombre}`,
+                            leido: false
+                        }
+                    });
+                }
+            }
+
+        } catch (notifError) {
+            console.error('Error enviando notificación al tutor:', notifError);
+        }
 
         const evidenciaConComentarios = await prisma.evidencia.findUnique({
             where: { id: nuevaEvidencia.id },
