@@ -4,7 +4,8 @@ import {
     createUsuario,
     updateUsuario,
     deleteUsuario,
-    bulkCreateUsuarios
+    bulkCreateUsuarios,
+    changePassword
 } from '../../controllers/usuario.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -181,4 +182,21 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, deleteUsuario);
+
+    // POST /cambiar-clave (Cambiar contraseña)
+    fastify.post('/cambiar-clave', {
+        schema: {
+            description: 'Cambiar contraseña del usuario actual',
+            tags: ['Usuarios'],
+            security: [{ bearerAuth: [] }],
+            body: {
+                type: 'object',
+                required: ['claveActual', 'nuevaClave'],
+                properties: {
+                    claveActual: { type: 'string' },
+                    nuevaClave: { type: 'string', minLength: 8 }
+                }
+            }
+        }
+    }, changePassword);
 }

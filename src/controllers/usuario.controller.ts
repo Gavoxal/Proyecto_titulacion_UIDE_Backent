@@ -12,7 +12,11 @@ export const getUsuarios = async (request: FastifyRequest, reply: FastifyReply) 
     try {
         const where: any = {};
         if (rol) {
-            where.rol = rol;
+            if (rol.includes(',')) {
+                where.rol = { in: rol.split(',') };
+            } else {
+                where.rol = rol;
+            }
         }
 
         const usuarios = await prisma.usuario.findMany({
@@ -334,5 +338,50 @@ export const bulkCreateUsuarios = async (request: FastifyRequest, reply: Fastify
             message: 'Error en carga masiva',
             error: error.message
         });
+    }
+};
+
+export const changePassword = async (request: FastifyRequest, reply: FastifyReply) => {
+    // @ts-ignore
+    const prisma = request.server.prisma;
+    const user = request.user as any;
+    const { claveActual, nuevaClave } = request.body as any;
+
+    if (!claveActual || !nuevaClave) {
+        return reply.code(400).send({ message: 'Se requieren claveActual y nuevaClave' });
+    }
+
+    try {
+        // Obtener auth actual para verificar contraseña
+        const auth = await prisma.auth.findUnique({
+            where: { usuarioId: Number(user.id) }
+        });
+
+        if (!auth) {
+            return reply.code(404).send({ message: 'Credenciales no encontradas para este usuario' });
+        }
+
+        // Verificar contraseña actual
+        const cleanHash = auth.password.replace(/^\$2y\$/, '$2b$'); // Compatibilidad hashes PHP/Laravel si hubiere
+        const valid = await bcrypt.compare(claveActual, cleanHash);
+
+        if (!valid) {
+            return reply.code(401).send({ message: 'La contraseña actual es incorrecta' });
+        }
+
+        // Hashear nueva contraseña
+        const hashedPassword = await bcrypt.hash(nuevaClave, 10);
+
+        // Actualizar
+        await prisma.auth.update({
+            where: { usuarioId: Number(user.id) },
+            data: { password: hashedPassword }
+        });
+
+        return reply.code(200).send({ message: 'Contraseña actualizada exitosamente' });
+
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error al cambiar la contraseña' });
     }
 };
