@@ -114,6 +114,8 @@ await app.register((await import('./routes/defensas/defensa.routes.js')).default
 await app.register((await import('./routes/notificacion.routes.js')).default, { prefix: '/api/v1/notificaciones' });
 // @ts-ignore
 await app.register((await import('./routes/trabajos/trabajos.routes.js')).default, { prefix: '/api/v1/trabajos-titulacion' });
+// @ts-ignore
+await app.register((await import('./routes/dashboard/dashboard.routes.js')).default, { prefix: '/api/v1/dashboard' });
 
 
 
