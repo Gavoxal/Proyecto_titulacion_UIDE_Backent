@@ -229,18 +229,67 @@ export const getPropuestas = async (request: FastifyRequest, reply: FastifyReply
                         }
                     }
                 },
-                entregablesFinales: true
+                entregablesFinales: true,
+                defensaPrivada: {
+                    include: {
+                        participantes: {
+                            include: {
+                                usuario: {
+                                    select: { id: true, nombres: true, apellidos: true, rol: true, correoInstitucional: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                defensaPublica: {
+                    include: {
+                        participantes: {
+                            include: {
+                                usuario: {
+                                    select: { id: true, nombres: true, apellidos: true, rol: true, correoInstitucional: true }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
 
-        if (propuestas.length > 0) {
-            console.log(`[DEBUG] First proposal student data:`, JSON.stringify(propuestas[0].estudiante, null, 2));
+        // Agregar myEvaluation a cada defensa
+        const propuestasWithMyEvaluation = propuestas.map(propuesta => {
+            const result: any = { ...propuesta };
+
+            // Agregar myEvaluation a defensaPrivada
+            if (result.defensaPrivada) {
+                const myParticipacion = result.defensaPrivada.participantes?.find(
+                    (p: any) => p.usuario.id === Number(usuario.id)
+                );
+                result.defensaPrivada.myEvaluation = myParticipacion ? {
+                    calificacion: myParticipacion.calificacion,
+                    comentario: myParticipacion.comentario
+                } : null;
+            }
+
+            // Agregar myEvaluation a defensaPublica
+            if (result.defensaPublica) {
+                const myParticipacion = result.defensaPublica.participantes?.find(
+                    (p: any) => p.usuario.id === Number(usuario.id)
+                );
+                result.defensaPublica.myEvaluation = myParticipacion ? {
+                    calificacion: myParticipacion.calificacion,
+                    comentario: myParticipacion.comentario
+                } : null;
+            }
+
+            return result;
+        });
+
+        if (propuestasWithMyEvaluation.length > 0) {
+            console.log(`[DEBUG] First proposal student data:`, JSON.stringify(propuestasWithMyEvaluation[0].estudiante, null, 2));
         }
 
-        console.log(`[DEBUG] Propuestas found: ${propuestas.length}`);
-        return propuestas;
-        console.log(`[DEBUG] Propuestas found: ${propuestas.length}`);
-        return propuestas;
+        console.log(`[DEBUG] Propuestas found: ${propuestasWithMyEvaluation.length}`);
+        return reply.code(200).send(propuestasWithMyEvaluation);
     } catch (error: any) {
         request.log.error(`[ERROR] getPropuestas: ${error.message}`);
         console.error("Full Error Prisma getPropuestas:", error);
@@ -267,6 +316,7 @@ export const getPropuestaById = async (request: FastifyRequest, reply: FastifyRe
             include: {
                 estudiante: {
                     select: {
+                        id: true,
                         nombres: true,
                         apellidos: true,
                         cedula: true,
@@ -292,6 +342,29 @@ export const getPropuestaById = async (request: FastifyRequest, reply: FastifyRe
                         }
                     },
                     orderBy: { id: 'asc' }
+                },
+                entregablesFinales: true,
+                defensaPrivada: {
+                    include: {
+                        participantes: {
+                            include: {
+                                usuario: {
+                                    select: { id: true, nombres: true, apellidos: true, rol: true, correoInstitucional: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                defensaPublica: {
+                    include: {
+                        participantes: {
+                            include: {
+                                usuario: {
+                                    select: { id: true, nombres: true, apellidos: true, rol: true, correoInstitucional: true }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         });

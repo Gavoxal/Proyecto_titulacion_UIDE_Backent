@@ -4,17 +4,23 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.office365.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
     auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS
+    },
+    tls: {
+        ciphers: 'SSLv3',
+        rejectUnauthorized: false
     }
 });
 
 export const sendCredentialsEmail = async (to: string, nombre: string, clave: string) => {
     try {
         const mailOptions = {
-            from: process.env.GMAIL_USER,
+            from: `"Sistema de Titulación UIDE" <${process.env.GMAIL_USER}>`,
             to: to,
             subject: 'Credenciales de Acceso - Sistema de Titulación UIDE',
             html: `
@@ -46,7 +52,7 @@ export const sendCredentialsEmail = async (to: string, nombre: string, clave: st
 export const sendPlatformAccessEmail = async (to: string, nombre: string) => {
     try {
         const mailOptions = {
-            from: process.env.GMAIL_USER,
+            from: `"Sistema de Titulación UIDE" <${process.env.GMAIL_USER}>`,
             to: to,
             subject: 'Acceso Habilitado - Sistema de Titulación UIDE',
             html: `
@@ -77,7 +83,7 @@ export const sendPlatformAccessEmail = async (to: string, nombre: string) => {
 export const sendProposalsCompletedEmail = async (to: string, nombreDirector: string, nombreEstudiante: string) => {
     try {
         const mailOptions = {
-            from: process.env.GMAIL_USER,
+            from: `"Sistema de Titulación UIDE" <${process.env.GMAIL_USER}>`,
             to: to,
             subject: 'Nuevas Propuestas de Titulación - UIDE',
             html: `
@@ -119,7 +125,7 @@ export const sendDefenseNotificationEmail = async (params: {
     try {
         const isStudent = rol === 'ESTUDIANTE' || rol === 'Estudiante';
         const mailOptions = {
-            from: process.env.GMAIL_USER,
+            from: `"Sistema de Titulación UIDE" <${process.env.GMAIL_USER}>`,
             to: to,
             subject: `Notificación de Defensa ${tipo} - Sistema de Titulación UIDE`,
             html: `
@@ -139,7 +145,7 @@ export const sendDefenseNotificationEmail = async (params: {
                     
                     <p>Por favor, sea puntual y asegúrese de contar con todos los materiales necesarios para el evento.</p>
                     
-                    <a href="https://grade-x.online/login" style="display: block; width: fit-content; margin: 20px auto; padding: 10px 20px; background-color: #c62828; color: white; text-decoration: none; border-radius: 5px;">Acceder al Sistema</a>
+                    <a href="https://grade-x.online/ingreso" style="display: block; width: fit-content; margin: 20px auto; padding: 10px 20px; background-color: #c62828; color: white; text-decoration: none; border-radius: 5px;">Acceder al Sistema</a>
                     
                     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                     <p style="font-size: 12px; color: #757575; text-align: center;">Este es un mensaje automático del Sistema de Gestión de Titulación UIDE.</p>

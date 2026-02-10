@@ -465,6 +465,8 @@ enum ModalidadReunion {
 enum TipoParticipanteDefensa {
   TUTOR
   COMITE
+  DIRECTOR
+  COORDINADOR
 }
 
 enum EstadoDefensaPrivada {

@@ -46,7 +46,22 @@ export const createEntregable = async (request: FastifyRequest, reply: FastifyRe
             return reply.code(400).send({ message: 'Faltan datos (tipo, propuestasId, file)' });
         }
 
-        const propId = Number(propuestasId);
+        const user = request.user as any;
+        let propId = Number(propuestasId);
+
+        // Seguridad/Robustez: Forzar el ID de la propuesta aprobada si el usuario es ESTUDIANTE
+        if (user.rol === 'ESTUDIANTE') {
+            const approvedProp = await prisma.propuesta.findFirst({
+                where: {
+                    fkEstudiante: user.id,
+                    estado: { in: ['APROBADA', 'APROBADA_CON_COMENTARIOS'] }
+                },
+                select: { id: true }
+            });
+            if (approvedProp) {
+                propId = approvedProp.id;
+            }
+        }
 
         const result = await prisma.$transaction(async (tx) => {
             const existingActive = await tx.entregableFinal.findFirst({
@@ -111,9 +126,30 @@ export const getEntregablesByPropuesta = async (request: FastifyRequest, reply: 
     const prisma = request.server.prisma;
     const { propuestaId } = request.params as any;
     const { history } = request.query as any;
+    const user = request.user as any;
 
     try {
-        const whereClause: any = { propuestasId: Number(propuestaId) };
+        const propId = Number(propuestaId);
+
+        // Verificar que el usuario tenga permiso para ver esta propuesta
+        const propuesta = await prisma.propuesta.findUnique({
+            where: { id: propId },
+            select: { fkEstudiante: true }
+        });
+
+        if (!propuesta) {
+            return reply.code(404).send({ message: 'Propuesta no encontrada' });
+        }
+
+        // Solo el estudiante dueño, tutores, directores y coordinadores pueden ver entregables
+        const isOwner = user.id === propuesta.fkEstudiante;
+        const canView = isOwner || ['TUTOR', 'DIRECTOR', 'COORDINADOR', 'COMITE'].includes(user.rol);
+
+        if (!canView) {
+            return reply.code(403).send({ message: 'No tienes permiso para ver estos entregables' });
+        }
+
+        const whereClause: any = { propuestasId: propId };
 
         // Si no piden historial explícitamente, solo devolver activos
         if (history !== 'true') {
@@ -126,7 +162,7 @@ export const getEntregablesByPropuesta = async (request: FastifyRequest, reply: 
                 version: 'desc' // Mostrar la versión más reciente primero
             }
         });
-        return entregables;
+        return reply.code(200).send(entregables);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo entregables' });
@@ -143,7 +179,7 @@ export const updateEntregable = async (request: FastifyRequest, reply: FastifyRe
             where: { id: Number(id) },
             data: { urlArchivo }
         });
-        return entregableActualizado;
+        return reply.code(200).send(entregableActualizado);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error actualizando entregable' });
@@ -154,23 +190,46 @@ export const getUnlockStatus = async (request: FastifyRequest, reply: FastifyRep
     const user = request.user as any;
 
     try {
-        // Contar evidencias aprobadas del estudiante actual
-        // Relacion: Usuario -> Propuesta -> Actividad -> Evidencia
+        // 1. Contar evidencias aprobadas del estudiante actual
         const approvedCount = await prisma.evidencia.count({
             where: {
                 estadoRevisionTutor: 'APROBADO',
                 actividad: {
                     propuesta: {
-                        fkEstudiante: user.id
+                        fkEstudiante: Number(user.id)
                     }
                 }
             }
         });
 
+        // 2. Verificar entregables finales cargados
+        const entregables = await prisma.entregableFinal.findMany({
+            where: {
+                isActive: true,
+                propuesta: {
+                    fkEstudiante: Number(user.id)
+                }
+            },
+            select: { tipo: true }
+        });
+
+        const uploadedTypes = entregables.map(e => e.tipo);
+        const hasTesis = uploadedTypes.includes('TESIS');
+        const hasManual = uploadedTypes.includes('MANUAL_USUARIO');
+        const hasArticulo = uploadedTypes.includes('ARTICULO');
+
+        const allDocsUploaded = hasTesis && hasManual && hasArticulo;
+
         return {
-            unlocked: approvedCount >= 16,
+            unlocked: approvedCount >= 16, // Esto mantiene el desbloqueo de la sección "Proyecto"
             approvedWeeks: approvedCount,
-            requiredWeeks: 16
+            requiredWeeks: 16,
+            documents: {
+                hasTesis,
+                hasManual,
+                hasArticulo
+            },
+            unlockedDefense: approvedCount >= 16
         };
     } catch (error) {
         request.log.error(error);

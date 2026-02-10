@@ -37,7 +37,7 @@ export const getUsuarios = async (request: FastifyRequest, reply: FastifyReply) 
                 estudiantePerfil: true
             }
         });
-        return usuarios;
+        return reply.code(200).send(usuarios);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error recuperando usuarios' });
@@ -59,13 +59,14 @@ export const getUsuarioById = async (request: FastifyRequest, reply: FastifyRepl
                 rol: true,
                 // @ts-ignore
                 designacion: true,
-                createdAt: true
+                createdAt: true,
+                estudiantePerfil: true
             }
         });
         if (!usuario) {
             return reply.code(404).send({ message: 'Usuario no encontrado' });
         }
-        return usuario;
+        return reply.code(200).send(usuario);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error recuperando usuario' });
@@ -78,15 +79,19 @@ export const createUsuario = async (request: FastifyRequest, reply: FastifyReply
     const { cedula, nombres, apellidos, correo, clave, rol, designacion } = request.body as any;
 
     try {
-        const hashedPassword = await bcrypt.hash(clave, 10);
+        const safeCorreo = correo?.trim();
+        const safeClave = clave?.trim();
+        const safeCedula = cedula?.trim();
+
+        const hashedPassword = await bcrypt.hash(safeClave, 10);
 
         const result = await prisma.$transaction(async (tx) => {
             const nuevoUsuario = await tx.usuario.create({
                 data: {
-                    cedula,
+                    cedula: safeCedula,
                     nombres,
                     apellidos,
-                    correoInstitucional: correo,
+                    correoInstitucional: safeCorreo,
                     rol: rol || 'ESTUDIANTE',
                     // @ts-ignore
                     designacion
@@ -95,7 +100,7 @@ export const createUsuario = async (request: FastifyRequest, reply: FastifyReply
 
             await tx.auth.create({
                 data: {
-                    username: correo,
+                    username: safeCorreo,
                     password: hashedPassword,
                     usuarioId: nuevoUsuario.id
                 }
@@ -105,8 +110,8 @@ export const createUsuario = async (request: FastifyRequest, reply: FastifyReply
         });
 
         // Enviar correo de credenciales (sin esperar a que bloquee la respuesta)
-        sendCredentialsEmail(correo, `${nombres} ${apellidos}`, clave).catch((err: any) => {
-            request.log.error(`Error enviando correo a ${correo}: ${err.message}`);
+        sendCredentialsEmail(safeCorreo, `${nombres} ${apellidos}`, safeClave).catch((err: any) => {
+            request.log.error(`Error enviando correo a ${safeCorreo}: ${err.message}`);
         });
 
         return reply.code(201).send(result);
@@ -233,23 +238,27 @@ export const bulkCreateUsuarios = async (request: FastifyRequest, reply: Fastify
                     continue;
                 }
 
-                console.log(`[BULK] Procesando: ${cedula} - ${correo}`);
+                // Sanitize
+                const safeCorreo = correo.toString().trim();
+                const safeCedula = cedula.toString().trim();
+
+                console.log(`[BULK] Procesando: ${safeCedula} - ${safeCorreo}`);
 
                 // Verificar si ya existe
                 const existente = await prisma.usuario.findFirst({
                     where: {
                         OR: [
-                            { cedula: String(cedula) }, // Ensure string
-                            { correoInstitucional: String(correo) }
+                            { cedula: safeCedula },
+                            { correoInstitucional: safeCorreo }
                         ]
                     }
                 });
 
                 if (existente) {
                     console.log(`[BULK] USUARIO EXISTE (ID: ${existente.id}). Omitiendo...`);
-                    resultados.omitidos.push(cedula);
+                    resultados.omitidos.push(safeCedula);
                     resultados.detalles.omitidos.push({
-                        cedula,
+                        cedula: safeCedula,
                         nombre: `${nombres} ${apellidos}`,
                         motivo: 'Ya registrado'
                     });
@@ -264,14 +273,14 @@ export const bulkCreateUsuarios = async (request: FastifyRequest, reply: Fastify
 
                 // Preparar datos de creación
                 const createData: any = {
-                    cedula: String(cedula),
+                    cedula: safeCedula,
                     nombres,
                     apellidos,
-                    correoInstitucional: correo,
+                    correoInstitucional: safeCorreo,
                     rol: rol || 'ESTUDIANTE',
                     auth: {
                         create: {
-                            username: correo, // Usar correo como username
+                            username: safeCorreo, // Usar correo como username
                             password: hashedPassword
                         }
                     }
@@ -308,15 +317,15 @@ export const bulkCreateUsuarios = async (request: FastifyRequest, reply: Fastify
                 });
 
                 console.log(`[BULK] Usuario Creado: ${nuevoUsuario.id}`);
-                resultados.exitosos.push(cedula);
+                resultados.exitosos.push(safeCedula);
                 resultados.detalles.exitosos.push(nuevoUsuario);
 
                 // Enviar correo con la contraseña generada
                 try {
-                    console.log(`[BULK] Enviando correo a ${correo}...`);
-                    await sendCredentialsEmail(correo, `${nombres} ${apellidos}`, rawPassword);
+                    console.log(`[BULK] Enviando correo a ${safeCorreo}...`);
+                    await sendCredentialsEmail(safeCorreo, `${nombres} ${apellidos}`, rawPassword);
                 } catch (emailError) {
-                    console.error(`Error enviando correo a ${correo}`, emailError);
+                    console.error(`Error enviando correo a ${safeCorreo}`, emailError);
                 }
 
             } catch (error: any) {

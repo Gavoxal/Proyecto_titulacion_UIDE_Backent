@@ -131,7 +131,7 @@ export const getVotacionesByEstudiante = async (request: FastifyRequest, reply: 
             orderBy: { prioridad: 'asc' }
         });
 
-        return votaciones;
+        return reply.code(200).send(votaciones);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo votaciones' });
@@ -178,7 +178,7 @@ export const getVotacionesByPropuesta = async (request: FastifyRequest, reply: F
             orderBy: { prioridad: 'asc' }
         });
 
-        return votaciones;
+        return reply.code(200).send(votaciones);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo votaciones' });
@@ -219,7 +219,7 @@ export const getVotacionesByTutor = async (request: FastifyRequest, reply: Fasti
             ]
         });
 
-        return votaciones;
+        return reply.code(200).send(votaciones);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo votaciones' });
@@ -258,7 +258,7 @@ export const getAllVotaciones = async (request: FastifyRequest, reply: FastifyRe
             ]
         });
 
-        return votaciones;
+        return reply.code(200).send(votaciones);
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error obteniendo votaciones' });

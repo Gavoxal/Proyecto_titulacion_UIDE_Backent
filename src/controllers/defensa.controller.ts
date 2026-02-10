@@ -73,17 +73,29 @@ export const createDefensaPrivada = async (request: FastifyRequest, reply: Fasti
         });
 
         // Notificar al estudiante (sin esperar a que bloquee la respuesta)
-        if (fechaDefensa && (defensa.propuesta.estudiante as any).correoInstitucional) {
-            sendDefenseNotificationEmail({
-                to: (defensa.propuesta.estudiante as any).correoInstitucional,
-                nombre: `${defensa.propuesta.estudiante.nombres} ${defensa.propuesta.estudiante.apellidos}`,
-                rol: 'ESTUDIANTE',
-                tema: defensa.propuesta.titulo,
-                fecha: new Date(fechaDefensa).toISOString().split('T')[0],
-                hora: horaDefensa,
-                aula: aula || 'Por asignar',
-                tipo: 'Privada'
-            }).catch((err: any) => request.log.error(`Error enviando correo a estudiante: ${err.message}`));
+        if (fechaDefensa) {
+            const fechaStr = new Date(fechaDefensa).toLocaleDateString();
+            const mensaje = `Tu defensa privada ha sido programada para el ${fechaStr} a las ${horaDefensa || 'por definir'} en ${aula || 'lugar por asignar'}.`;
+
+            await prisma.notificacion.create({
+                data: {
+                    mensaje,
+                    usuarioId: defensa.propuesta.estudiante.id
+                }
+            }).catch((err: any) => request.log.error(`Error creando notificación interna: ${err.message}`));
+
+            if ((defensa.propuesta.estudiante as any).correoInstitucional) {
+                sendDefenseNotificationEmail({
+                    to: (defensa.propuesta.estudiante as any).correoInstitucional,
+                    nombre: `${defensa.propuesta.estudiante.nombres} ${defensa.propuesta.estudiante.apellidos}`,
+                    rol: 'ESTUDIANTE',
+                    tema: defensa.propuesta.titulo,
+                    fecha: new Date(fechaDefensa).toISOString().split('T')[0],
+                    hora: horaDefensa,
+                    aula: aula || 'Por asignar',
+                    tipo: 'Privada'
+                }).catch((err: any) => request.log.error(`Error enviando correo a estudiante: ${err.message}`));
+            }
         }
 
         return reply.code(201).send(defensa);
@@ -176,7 +188,7 @@ export const updateDefensaPrivada = async (request: FastifyRequest, reply: Fasti
             data: updateData,
             include: {
                 propuesta: {
-                    select: { id: true, titulo: true, estudiante: { select: { nombres: true, apellidos: true, correoInstitucional: true } } }
+                    select: { id: true, titulo: true, estudiante: { select: { id: true, nombres: true, apellidos: true, correoInstitucional: true } } }
                 },
                 participantes: {
                     include: {
@@ -190,6 +202,11 @@ export const updateDefensaPrivada = async (request: FastifyRequest, reply: Fasti
 
         // Notificar cambios (estudiante y participantes)
         if (data.fechaDefensa || data.horaDefensa || data.aula) {
+            const mensaje = `Se han actualizado los detalles de tu defensa privada: ${defensa.propuesta.titulo}.`;
+            await prisma.notificacion.create({
+                data: { mensaje, usuarioId: defensa.propuesta.estudiante.id }
+            }).catch(() => { });
+
             if ((defensa.propuesta.estudiante as any).correoInstitucional) {
                 sendDefenseNotificationEmail({
                     to: (defensa.propuesta.estudiante as any).correoInstitucional,
@@ -204,6 +221,11 @@ export const updateDefensaPrivada = async (request: FastifyRequest, reply: Fasti
             }
 
             for (const p of defensa.participantes) {
+                const msgPart = `Se han actualizado los detalles de la defensa privada de: ${defensa.propuesta.titulo} donde participas como tribunal.`;
+                await prisma.notificacion.create({
+                    data: { mensaje: msgPart, usuarioId: p.usuarioId }
+                }).catch(() => { });
+
                 if ((p.usuario as any).correoInstitucional) {
                     sendDefenseNotificationEmail({
                         to: (p.usuario as any).correoInstitucional,
@@ -232,6 +254,7 @@ export const updateDefensaPrivada = async (request: FastifyRequest, reply: Fasti
  * Acceso: DIRECTOR, COORDINADOR
  */
 export const addParticipanteDefensaPrivada = async (request: FastifyRequest, reply: FastifyReply) => {
+    console.log('DEBUG: Iniciando addParticipanteDefensaPrivada');
     const prisma = request.server.prisma;
     const user = request.user as any;
     const { evaluacionId } = request.params as any;
@@ -252,33 +275,39 @@ export const addParticipanteDefensaPrivada = async (request: FastifyRequest, rep
             return reply.code(404).send({ message: 'Usuario no encontrado' });
         }
 
-        if (tipoParticipante === 'TUTOR' && usuario.rol !== 'TUTOR') {
-            return reply.code(400).send({ message: 'El usuario debe tener rol TUTOR' });
+        // Robustez: Siempre usar el rol real del usuario si es válido para el tribunal
+        let finalTipo: any = tipoParticipante;
+        const rolesPermitidos = ['TUTOR', 'COMITE', 'DIRECTOR', 'COORDINADOR'];
+        if (rolesPermitidos.includes(usuario.rol)) {
+            finalTipo = usuario.rol as any;
+        } else {
+            return reply.code(400).send({ message: `El usuario con rol ${usuario.rol} no puede ser miembro del tribunal` });
         }
 
-        if (tipoParticipante === 'COMITE' && usuario.rol !== 'COMITE') {
-            return reply.code(400).send({ message: 'El usuario debe tener rol COMITE' });
+        // Verificar que la evaluación existe antes del upsert
+        const checkEval = await prisma.evaluacionDefensaPrivada.findUnique({
+            where: { id: Number(evaluacionId) }
+        });
+        if (!checkEval) {
+            console.error('DEBUG: Evaluación no encontrada:', evaluacionId);
+            return reply.code(404).send({ message: 'Evaluación de defensa no encontrada' });
         }
-
-        // Verificar si ya existe el participante
-        const existente = await prisma.participanteDefensaPrivada.findUnique({
+        console.log('DEBUG: Procediendo con upsert para participante:', usuarioId);
+        const participante = await prisma.participanteDefensaPrivada.upsert({
             where: {
                 evaluacionId_usuarioId: {
                     evaluacionId: Number(evaluacionId),
                     usuarioId: Number(usuarioId)
                 }
-            }
-        });
-
-        if (existente) {
-            return reply.code(400).send({ message: 'El participante ya está asignado a esta defensa' });
-        }
-
-        const participante = await prisma.participanteDefensaPrivada.create({
-            data: {
+            },
+            update: {
+                tipoParticipante: finalTipo,
+                rol
+            },
+            create: {
                 evaluacionId: Number(evaluacionId),
                 usuarioId: Number(usuarioId),
-                tipoParticipante,
+                tipoParticipante: finalTipo,
                 rol
             },
             include: {
@@ -300,24 +329,43 @@ export const addParticipanteDefensaPrivada = async (request: FastifyRequest, rep
             }
         });
 
-        if (evaluacion && evaluacion.fechaDefensa && (participante.usuario as any).correoInstitucional) {
-            sendDefenseNotificationEmail({
-                to: (participante.usuario as any).correoInstitucional,
-                nombre: `${participante.usuario.nombres} ${participante.usuario.apellidos}`,
-                rol: rol || 'Miembro del Tribunal',
-                estudianteNombre: `${evaluacion.propuesta.estudiante.nombres} ${evaluacion.propuesta.estudiante.apellidos}`,
-                tema: evaluacion.propuesta.titulo,
-                fecha: evaluacion.fechaDefensa.toISOString().split('T')[0],
-                hora: evaluacion.horaDefensa?.toLocaleTimeString() || '--:--',
-                aula: evaluacion.aula || 'Por asignar',
-                tipo: 'Privada'
-            }).catch((err: any) => request.log.error(`Error enviando correo a participante: ${err.message}`));
+        if (evaluacion) {
+            // Notificar al estudiante
+            await prisma.notificacion.create({
+                data: {
+                    mensaje: `Se ha asignado a ${participante.usuario.nombres} ${participante.usuario.apellidos} como ${rol || 'miembro'} del tribunal para tu defensa privada.`,
+                    usuarioId: evaluacion.propuesta.estudiante.id
+                }
+            }).catch(() => { });
+
+            // Notificar al participante
+            await prisma.notificacion.create({
+                data: {
+                    mensaje: `Has sido asignado como ${rol || 'miembro'} del tribunal para la defensa privada de: ${evaluacion.propuesta.titulo}.`,
+                    usuarioId: participante.usuarioId
+                }
+            }).catch(() => { });
+
+            if (evaluacion.fechaDefensa && (participante.usuario as any).correoInstitucional) {
+                sendDefenseNotificationEmail({
+                    to: (participante.usuario as any).correoInstitucional,
+                    nombre: `${participante.usuario.nombres} ${participante.usuario.apellidos}`,
+                    rol: rol || 'Miembro del Tribunal',
+                    estudianteNombre: `${evaluacion.propuesta.estudiante.nombres} ${evaluacion.propuesta.estudiante.apellidos}`,
+                    tema: evaluacion.propuesta.titulo,
+                    fecha: evaluacion.fechaDefensa.toISOString().split('T')[0],
+                    hora: evaluacion.horaDefensa?.toLocaleTimeString() || '--:--',
+                    aula: evaluacion.aula || 'Por asignar',
+                    tipo: 'Privada'
+                }).catch((err: any) => request.log.error(`Error enviando correo a participante: ${err.message}`));
+            }
         }
 
         return reply.code(201).send(participante);
-    } catch (error) {
+    } catch (error: any) {
+        console.error('DEBUG ERROR DETALLADO:', error);
         request.log.error(error);
-        return reply.code(500).send({ message: 'Error agregando participante' });
+        return reply.code(500).send({ message: 'Error agregando participante: ' + (error.message || 'Error desconocido') });
     }
 };
 
@@ -371,14 +419,33 @@ export const calificarDefensaPrivada = async (request: FastifyRequest, reply: Fa
 
         if (calificaciones.length === todosParticipantes.length && calificaciones.length > 0) {
             const promedio = calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length;
+            const nuevoEstado = promedio >= 7 ? 'APROBADA' : 'RECHAZADA';
 
-            await prisma.evaluacionDefensaPrivada.update({
+            const defensaActualizada = await prisma.evaluacionDefensaPrivada.update({
                 where: { id: Number(evaluacionId) },
                 data: {
                     calificacion: promedio,
+                    estado: nuevoEstado,
                     fechaEvaluacion: new Date()
+                },
+                include: {
+                    propuesta: true
                 }
             });
+
+            // Si se aprueba, desbloquear la defensa pública
+            if (nuevoEstado === 'APROBADA') {
+                const defensaPublica = await prisma.evaluacionDefensaPublica.findUnique({
+                    where: { propuestaId: defensaActualizada.propuestaId }
+                });
+
+                if (defensaPublica && defensaPublica.estado === 'BLOQUEADA') {
+                    await prisma.evaluacionDefensaPublica.update({
+                        where: { id: defensaPublica.id },
+                        data: { estado: 'PENDIENTE' }
+                    });
+                }
+            }
         }
 
         return participanteActualizado;
@@ -465,8 +532,8 @@ export const createDefensaPublica = async (request: FastifyRequest, reply: Fasti
             where: { propuestaId: Number(propuestaId) }
         });
 
-        if (!defensaPrivada || defensaPrivada.estado !== 'APROBADA') {
-            return reply.code(400).send({ message: 'La defensa privada debe estar aprobada primero' });
+        if (!defensaPrivada || (defensaPrivada.estado !== 'APROBADA' && (!defensaPrivada.calificacion || Number(defensaPrivada.calificacion) < 7))) {
+            return reply.code(400).send({ message: 'La defensa privada debe estar aprobada primero (nota >= 7.0)' });
         }
 
         // Verificar si ya existe
@@ -500,17 +567,29 @@ export const createDefensaPublica = async (request: FastifyRequest, reply: Fasti
         });
 
         // Notificar al estudiante (sin esperar a que bloquee la respuesta)
-        if (fechaDefensa && (defensa.propuesta.estudiante as any).correoInstitucional) {
-            sendDefenseNotificationEmail({
-                to: (defensa.propuesta.estudiante as any).correoInstitucional,
-                nombre: `${defensa.propuesta.estudiante.nombres} ${defensa.propuesta.estudiante.apellidos}`,
-                rol: 'ESTUDIANTE',
-                tema: defensa.propuesta.titulo,
-                fecha: new Date(fechaDefensa).toISOString().split('T')[0],
-                hora: horaDefensa,
-                aula: aula || 'Por asignar',
-                tipo: 'Pública'
-            }).catch((err: any) => request.log.error(`Error enviando correo a estudiante: ${err.message}`));
+        if (fechaDefensa) {
+            const fechaStr = new Date(fechaDefensa).toLocaleDateString();
+            const mensaje = `Tu defensa pública ha sido programada para el ${fechaStr} a las ${horaDefensa || 'por definir'} en ${aula || 'lugar por asignar'}.`;
+
+            await prisma.notificacion.create({
+                data: {
+                    mensaje,
+                    usuarioId: defensa.propuesta.estudiante.id
+                }
+            }).catch((err: any) => request.log.error(`Error creando notificación interna: ${err.message}`));
+
+            if ((defensa.propuesta.estudiante as any).correoInstitucional) {
+                sendDefenseNotificationEmail({
+                    to: (defensa.propuesta.estudiante as any).correoInstitucional,
+                    nombre: `${defensa.propuesta.estudiante.nombres} ${defensa.propuesta.estudiante.apellidos}`,
+                    rol: 'ESTUDIANTE',
+                    tema: defensa.propuesta.titulo,
+                    fecha: new Date(fechaDefensa).toISOString().split('T')[0],
+                    hora: horaDefensa,
+                    aula: aula || 'Por asignar',
+                    tipo: 'Pública'
+                }).catch((err: any) => request.log.error(`Error enviando correo a estudiante: ${err.message}`));
+            }
         }
 
         return reply.code(201).send(defensa);
@@ -603,7 +682,7 @@ export const updateDefensaPublica = async (request: FastifyRequest, reply: Fasti
             data: updateData,
             include: {
                 propuesta: {
-                    select: { id: true, titulo: true, estudiante: { select: { nombres: true, apellidos: true, correoInstitucional: true } } }
+                    select: { id: true, titulo: true, estudiante: { select: { id: true, nombres: true, apellidos: true, correoInstitucional: true } } }
                 },
                 participantes: {
                     include: {
@@ -617,6 +696,11 @@ export const updateDefensaPublica = async (request: FastifyRequest, reply: Fasti
 
         // Notificar cambios (estudiante y participantes)
         if (data.fechaDefensa || data.horaDefensa || data.aula) {
+            const mensaje = `Se han actualizado los detalles de tu defensa pública: ${defensa.propuesta.titulo}.`;
+            await prisma.notificacion.create({
+                data: { mensaje, usuarioId: defensa.propuesta.estudiante.id }
+            }).catch(() => { });
+
             if ((defensa.propuesta.estudiante as any).correoInstitucional) {
                 sendDefenseNotificationEmail({
                     to: (defensa.propuesta.estudiante as any).correoInstitucional,
@@ -631,6 +715,11 @@ export const updateDefensaPublica = async (request: FastifyRequest, reply: Fasti
             }
 
             for (const p of defensa.participantes) {
+                const msgPart = `Se han actualizado los detalles de la defensa pública de: ${defensa.propuesta.titulo} donde participas como tribunal.`;
+                await prisma.notificacion.create({
+                    data: { mensaje: msgPart, usuarioId: p.usuarioId }
+                }).catch(() => { });
+
                 if ((p.usuario as any).correoInstitucional) {
                     sendDefenseNotificationEmail({
                         to: (p.usuario as any).correoInstitucional,
@@ -659,6 +748,7 @@ export const updateDefensaPublica = async (request: FastifyRequest, reply: Fasti
  * Acceso: DIRECTOR, COORDINADOR
  */
 export const addParticipanteDefensaPublica = async (request: FastifyRequest, reply: FastifyReply) => {
+    console.log('DEBUG: Iniciando addParticipanteDefensaPublica');
     const prisma = request.server.prisma;
     const user = request.user as any;
     const { evaluacionId } = request.params as any;
@@ -679,33 +769,39 @@ export const addParticipanteDefensaPublica = async (request: FastifyRequest, rep
             return reply.code(404).send({ message: 'Usuario no encontrado' });
         }
 
-        if (tipoParticipante === 'TUTOR' && usuario.rol !== 'TUTOR') {
-            return reply.code(400).send({ message: 'El usuario debe tener rol TUTOR' });
+        // Robustez: Siempre usar el rol real del usuario si es válido para el tribunal
+        let finalTipo: any = tipoParticipante;
+        const rolesPermitidos = ['TUTOR', 'COMITE', 'DIRECTOR', 'COORDINADOR'];
+        if (rolesPermitidos.includes(usuario.rol)) {
+            finalTipo = usuario.rol as any;
+        } else {
+            return reply.code(400).send({ message: `El usuario con rol ${usuario.rol} no puede ser miembro del tribunal` });
         }
 
-        if (tipoParticipante === 'COMITE' && usuario.rol !== 'COMITE') {
-            return reply.code(400).send({ message: 'El usuario debe tener rol COMITE' });
+        // Verificar que la evaluación existe antes del upsert
+        const checkEval = await prisma.evaluacionDefensaPublica.findUnique({
+            where: { id: Number(evaluacionId) }
+        });
+        if (!checkEval) {
+            console.error('DEBUG: Evaluación no encontrada:', evaluacionId);
+            return reply.code(404).send({ message: 'Evaluación de defensa no encontrada' });
         }
-
-        // Verificar si ya existe
-        const existente = await prisma.participanteDefensaPublica.findUnique({
+        console.log('DEBUG: Procediendo con upsert para participante:', usuarioId);
+        const participante = await prisma.participanteDefensaPublica.upsert({
             where: {
                 evaluacionId_usuarioId: {
                     evaluacionId: Number(evaluacionId),
                     usuarioId: Number(usuarioId)
                 }
-            }
-        });
-
-        if (existente) {
-            return reply.code(400).send({ message: 'El participante ya está asignado a esta defensa' });
-        }
-
-        const participante = await prisma.participanteDefensaPublica.create({
-            data: {
+            },
+            update: {
+                tipoParticipante: finalTipo,
+                rol
+            },
+            create: {
                 evaluacionId: Number(evaluacionId),
                 usuarioId: Number(usuarioId),
-                tipoParticipante,
+                tipoParticipante: finalTipo,
                 rol
             },
             include: {
@@ -727,24 +823,43 @@ export const addParticipanteDefensaPublica = async (request: FastifyRequest, rep
             }
         });
 
-        if (evaluacion && evaluacion.fechaDefensa && (participante.usuario as any).correoInstitucional) {
-            sendDefenseNotificationEmail({
-                to: (participante.usuario as any).correoInstitucional,
-                nombre: `${participante.usuario.nombres} ${participante.usuario.apellidos}`,
-                rol: rol || 'Miembro del Tribunal',
-                estudianteNombre: `${evaluacion.propuesta.estudiante.nombres} ${evaluacion.propuesta.estudiante.apellidos}`,
-                tema: evaluacion.propuesta.titulo,
-                fecha: evaluacion.fechaDefensa.toISOString().split('T')[0],
-                hora: evaluacion.horaDefensa?.toLocaleTimeString() || '--:--',
-                aula: evaluacion.aula || 'Por asignar',
-                tipo: 'Pública'
-            }).catch((err: any) => request.log.error(`Error enviando correo a participante: ${err.message}`));
+        if (evaluacion) {
+            // Notificar al estudiante
+            await prisma.notificacion.create({
+                data: {
+                    mensaje: `Se ha asignado a ${participante.usuario.nombres} ${participante.usuario.apellidos} como ${rol || 'miembro'} del tribunal para tu defensa pública.`,
+                    usuarioId: evaluacion.propuesta.estudiante.id
+                }
+            }).catch(() => { });
+
+            // Notificar al participante
+            await prisma.notificacion.create({
+                data: {
+                    mensaje: `Has sido asignado como ${rol || 'miembro'} del tribunal para la defensa pública de: ${evaluacion.propuesta.titulo}.`,
+                    usuarioId: participante.usuarioId
+                }
+            }).catch(() => { });
+
+            if (evaluacion.fechaDefensa && (participante.usuario as any).correoInstitucional) {
+                sendDefenseNotificationEmail({
+                    to: (participante.usuario as any).correoInstitucional,
+                    nombre: `${participante.usuario.nombres} ${participante.usuario.apellidos}`,
+                    rol: rol || 'Miembro del Tribunal',
+                    estudianteNombre: `${evaluacion.propuesta.estudiante.nombres} ${evaluacion.propuesta.estudiante.apellidos}`,
+                    tema: evaluacion.propuesta.titulo,
+                    fecha: evaluacion.fechaDefensa.toISOString().split('T')[0],
+                    hora: evaluacion.horaDefensa?.toLocaleTimeString() || '--:--',
+                    aula: evaluacion.aula || 'Por asignar',
+                    tipo: 'Pública'
+                }).catch((err: any) => request.log.error(`Error enviando correo a participante: ${err.message}`));
+            }
         }
 
         return reply.code(201).send(participante);
-    } catch (error) {
+    } catch (error: any) {
+        console.error('DEBUG ERROR DETALLADO:', error);
         request.log.error(error);
-        return reply.code(500).send({ message: 'Error agregando participante' });
+        return reply.code(500).send({ message: 'Error agregando participante: ' + (error.message || 'Error desconocido') });
     }
 };
 
@@ -798,14 +913,30 @@ export const calificarDefensaPublica = async (request: FastifyRequest, reply: Fa
 
         if (calificaciones.length === todosParticipantes.length && calificaciones.length > 0) {
             const promedio = calificaciones.reduce((a, b) => a + b, 0) / calificaciones.length;
+            const nuevoEstado = promedio >= 7 ? 'APROBADA' : 'RECHAZADA';
 
             await prisma.evaluacionDefensaPublica.update({
                 where: { id: Number(evaluacionId) },
                 data: {
                     calificacion: promedio,
+                    estado: nuevoEstado,
                     fechaEvaluacion: new Date()
                 }
             });
+
+            // Actualizar resultado final en la propuesta
+            const evaluacion = await prisma.evaluacionDefensaPublica.findUnique({
+                where: { id: Number(evaluacionId) }
+            });
+
+            if (evaluacion) {
+                await prisma.propuesta.update({
+                    where: { id: evaluacion.propuestaId },
+                    data: {
+                        resultadoDefensa: nuevoEstado === 'APROBADA' ? 'APROBADO' : 'REPROBADO'
+                    }
+                });
+            }
         }
 
         return participanteActualizado;
@@ -848,5 +979,191 @@ export const finalizarDefensaPublica = async (request: FastifyRequest, reply: Fa
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Error finalizando defensa pública' });
+    }
+};
+
+/**
+ * Obtener todas las defensas (privadas y públicas) donde el usuario es jurado/participante
+ * Acceso: TUTOR, COMITE, DOCENTE_INTEGRACION
+ */
+export const getDefensasJurado = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const user = request.user as any;
+
+    try {
+        // Obtener defensas privadas
+        const defensasPrivadas = await prisma.evaluacionDefensaPrivada.findMany({
+            where: {
+                participantes: {
+                    some: { usuarioId: user.id }
+                }
+            },
+            include: {
+                propuesta: {
+                    select: {
+                        id: true,
+                        titulo: true,
+                        estudiante: {
+                            select: {
+                                nombres: true,
+                                apellidos: true
+                            }
+                        },
+                        entregablesFinales: {
+                            where: { isActive: true },
+                            select: {
+                                id: true,
+                                tipo: true,
+                                urlArchivo: true
+                            }
+                        }
+                    }
+                },
+                participantes: {
+                    where: { usuarioId: user.id }
+                }
+            }
+        });
+
+        // Obtener defensas públicas
+        const defensasPublicas = await prisma.evaluacionDefensaPublica.findMany({
+            where: {
+                participantes: {
+                    some: { usuarioId: user.id }
+                }
+            },
+            include: {
+                propuesta: {
+                    select: {
+                        id: true,
+                        titulo: true,
+                        estudiante: {
+                            select: {
+                                nombres: true,
+                                apellidos: true
+                            }
+                        },
+                        entregablesFinales: {
+                            where: { isActive: true },
+                            select: {
+                                id: true,
+                                tipo: true,
+                                urlArchivo: true
+                            }
+                        }
+                    }
+                },
+                participantes: {
+                    where: { usuarioId: user.id }
+                }
+            }
+        });
+
+        // Formatear respuesta unificada
+        const privadasCtx = defensasPrivadas.map(d => ({
+            id: d.id,
+            tipo: 'PRIVADA',
+            tema: d.propuesta.titulo,
+            estudiante: `${d.propuesta.estudiante.nombres} ${d.propuesta.estudiante.apellidos}`,
+            fecha: d.fechaDefensa,
+            hora: d.horaDefensa,
+            aula: d.aula,
+            estado: d.estado,
+            rol: d.participantes[0]?.rol || d.participantes[0]?.tipoParticipante,
+            calificacion: d.participantes[0]?.calificacion || null,
+            comentario: d.participantes[0]?.comentario || null,
+            propuestaId: d.propuestaId,
+            entregablesFinales: d.propuesta.entregablesFinales || []
+        }));
+
+        const publicasCtx = defensasPublicas.map(d => ({
+            id: d.id,
+            tipo: 'PUBLICA',
+            tema: d.propuesta.titulo,
+            estudiante: `${d.propuesta.estudiante.nombres} ${d.propuesta.estudiante.apellidos}`,
+            fecha: d.fechaDefensa,
+            hora: d.horaDefensa,
+            aula: d.aula,
+            estado: d.estado,
+            rol: d.participantes[0]?.rol || d.participantes[0]?.tipoParticipante,
+            calificacion: d.participantes[0]?.calificacion || null,
+            comentario: d.participantes[0]?.comentario || null,
+            propuestaId: d.propuestaId,
+            entregablesFinales: d.propuesta.entregablesFinales || []
+        }));
+
+        // Combinar y ordenar por fecha descendente (más recientes primero)
+        const todas = [...privadasCtx, ...publicasCtx].sort((a, b) => {
+            const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
+            const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        return todas;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error obteniendo defensas del jurado' });
+    }
+};
+
+/**
+ * Obtener comentarios de todos los participantes de una defensa privada
+ */
+export const getComentariosDefensaPrivada = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { evaluacionId } = request.params as any;
+
+    try {
+        const participantes = await prisma.participanteDefensaPrivada.findMany({
+            where: { evaluacionId: Number(evaluacionId) },
+            include: {
+                usuario: {
+                    select: { nombres: true, apellidos: true, rol: true }
+                }
+            }
+        });
+
+        const formatted = participantes.map(p => ({
+            nombreJurado: `${p.usuario.nombres} ${p.usuario.apellidos}`,
+            rol: p.rol || p.tipoParticipante,
+            calificacion: p.calificacion,
+            comentario: p.comentario
+        }));
+
+        return formatted;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error obteniendo comentarios de defensa privada' });
+    }
+};
+
+/**
+ * Obtener comentarios de todos los participantes de una defensa pública
+ */
+export const getComentariosDefensaPublica = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const { evaluacionId } = request.params as any;
+
+    try {
+        const participantes = await prisma.participanteDefensaPublica.findMany({
+            where: { evaluacionId: Number(evaluacionId) },
+            include: {
+                usuario: {
+                    select: { nombres: true, apellidos: true, rol: true }
+                }
+            }
+        });
+
+        const formatted = participantes.map(p => ({
+            nombreJurado: `${p.usuario.nombres} ${p.usuario.apellidos}`,
+            rol: p.rol || p.tipoParticipante,
+            calificacion: p.calificacion,
+            comentario: p.comentario
+        }));
+
+        return formatted;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error obteniendo comentarios de defensa pública' });
     }
 };

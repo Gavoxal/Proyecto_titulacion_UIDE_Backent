@@ -92,7 +92,23 @@ export default async function (fastify: FastifyInstance, opts: any) {
                         }
                     }
                 }
-            }
+            },
+            entregablesFinales: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer' },
+                        tipo: { type: 'string' },
+                        urlArchivo: { type: 'string' },
+                        fechaSubida: { type: 'string', format: 'date-time' },
+                        version: { type: 'integer' },
+                        isActive: { type: 'boolean' }
+                    }
+                }
+            },
+            defensaPrivada: { type: 'object', nullable: true, additionalProperties: true },
+            defensaPublica: { type: 'object', nullable: true, additionalProperties: true }
         }
     };
 

@@ -12,7 +12,10 @@ import {
     updateDefensaPublica,
     addParticipanteDefensaPublica,
     calificarDefensaPublica,
-    finalizarDefensaPublica
+    finalizarDefensaPublica,
+    getDefensasJurado,
+    getComentariosDefensaPrivada,
+    getComentariosDefensaPublica
 } from '../../controllers/defensa.controller.js';
 import { FastifyInstance } from 'fastify';
 
@@ -91,10 +94,10 @@ export default async function (fastify: FastifyInstance, opts: any) {
             },
             body: {
                 type: 'object',
-                required: ['usuarioId', 'tipoParticipante'],
+                required: ['usuarioId'],
                 properties: {
                     usuarioId: { type: 'integer' },
-                    tipoParticipante: { type: 'string', enum: ['TUTOR', 'COMITE'] },
+                    tipoParticipante: { type: 'string', enum: ['TUTOR', 'COMITE', 'INTERNO', 'DIRECTOR', 'COORDINADOR'] },
                     rol: { type: 'string' }
                 }
             }
@@ -141,6 +144,19 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, finalizarDefensaPrivada);
+
+    // GET /privada/:evaluacionId/comentarios (Obtener todos los comentarios de jurado)
+    fastify.get('/privada/:evaluacionId/comentarios', {
+        schema: {
+            tags: ['Defensas'],
+            description: 'Obtener todos los comentarios de jurado para una defensa privada (Solo DIRECTOR/COORDINADOR)',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                properties: { evaluacionId: { type: 'integer' } }
+            }
+        }
+    }, getComentariosDefensaPrivada);
 
     // ============================================
     // DEFENSA PÚBLICA
@@ -213,10 +229,10 @@ export default async function (fastify: FastifyInstance, opts: any) {
             },
             body: {
                 type: 'object',
-                required: ['usuarioId', 'tipoParticipante'],
+                required: ['usuarioId'],
                 properties: {
                     usuarioId: { type: 'integer' },
-                    tipoParticipante: { type: 'string', enum: ['TUTOR', 'COMITE'] },
+                    tipoParticipante: { type: 'string', enum: ['TUTOR', 'COMITE', 'INTERNO', 'DIRECTOR', 'COORDINADOR'] },
                     rol: { type: 'string' }
                 }
             }
@@ -263,5 +279,31 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, finalizarDefensaPublica);
+
+    // GET /publica/:evaluacionId/comentarios (Obtener todos los comentarios de jurado)
+    fastify.get('/publica/:evaluacionId/comentarios', {
+        schema: {
+            tags: ['Defensas'],
+            description: 'Obtener todos los comentarios de jurado para una defensa pública (Solo DIRECTOR/COORDINADOR)',
+            security: [{ bearerAuth: [] }],
+            params: {
+                type: 'object',
+                properties: { evaluacionId: { type: 'integer' } }
+            }
+        }
+    }, getComentariosDefensaPublica);
+
+    // ============================================
+    // CONSULTAS JURADO / TUTOR
+    // ============================================
+
+    // GET /jurado (Obtener todas las defensas donde es jurado/participante)
+    fastify.get('/jurado', {
+        schema: {
+            tags: ['Defensas'],
+            description: 'Obtener mis defensas asignadas (Tutor/Jurado)',
+            security: [{ bearerAuth: [] }]
+        }
+    }, getDefensasJurado);
 
 }
