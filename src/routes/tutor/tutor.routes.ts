@@ -1,4 +1,4 @@
-import { getMisEstudiantes, getTutorProfile, updateTutorProfile } from '../../controllers/tutor.controller.js';
+import { getMisEstudiantes, getTutorProfile, updateTutorProfile, getMisEstudiantesNotas } from '../../controllers/tutor.controller.js';
 import { FastifyInstance } from 'fastify';
 
 export default async function (fastify: FastifyInstance, opts: any) {
@@ -58,4 +58,13 @@ export default async function (fastify: FastifyInstance, opts: any) {
             }
         }
     }, updateTutorProfile);
+
+    // GET /mis-estudiantes-notas
+    fastify.get('/mis-estudiantes-notas', {
+        schema: {
+            tags: ['Tutor'],
+            description: 'Obtener notas de estudiantes asignados',
+            security: [{ bearerAuth: [] }]
+        }
+    }, getMisEstudiantesNotas);
 }

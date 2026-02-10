@@ -71,20 +71,22 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
         descripcion,
         propuestaId,
         tipo,
+        semana,
         fechaActivacion,
         fechaEntrega,
         requisitos
     } = request.body as any;
+    console.log("DEBUG BACKEND: Creating activity with body:", request.body);
 
     try {
-        // Validación: Límite de 16 semanas/actividades por propuesta
+        // Validación: Límite de 64 actividades por propuesta (32 Tutor + 32 Docente aprox)
         const count = await prisma.actividad.count({
             where: { propuestaId: Number(propuestaId) }
         });
 
-        if (count >= 16) {
+        if (count >= 64) {
             return reply.code(400).send({
-                message: 'Límite alcanzado: No puedes crear más de 16 actividades para esta propuesta.'
+                message: 'Límite alcanzado: No puedes crear más de 64 actividades para esta propuesta.'
             });
         }
 
@@ -94,6 +96,7 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
                 descripcion,
                 propuestaId: Number(propuestaId),
                 tipo: tipo || 'DOCENCIA',
+                semana: semana ? Number(semana) : null,
                 // Nuevos campos
                 fechaActivacion: fechaActivacion ? new Date(fechaActivacion) : null,
                 fechaEntrega: fechaEntrega ? new Date(fechaEntrega) : null,
@@ -101,6 +104,7 @@ export const createActividad = async (request: FastifyRequest, reply: FastifyRep
                 estado: 'NO_ENTREGADO' // Default state
             }
         });
+        console.log("DEBUG BACKEND: New activity saved:", nuevaActividad);
 
         // NOTIFICACIÓN: Al Estudiante
         try {
@@ -141,24 +145,70 @@ export const getActividadesByPropuesta = async (request: FastifyRequest, reply: 
         //     where.tipo = tipo; // Filter by tipo if provided // Modified as per instruction
         // } // Modified as per instruction
 
-        const actividades = await prisma.actividad.findMany({
+        const actividades = await (prisma.actividad as any).findMany({
             where: { propuestaId: Number(propuestaId) },
             include: {
                 evidencias: true,
-                propuesta: {
-                    include: {
-                        trabajosTitulacion: {
-                            include: {
-                                tutor: true
-                            }
-                        }
-                    }
-                }
+                propuesta: true
             },
             orderBy: {
                 id: 'asc'
             }
         });
+
+        // Debug log para ver el estado de todas las actividades antes de enviarlas
+        console.log(`DEBUG BACKEND [getActividadesByPropuesta]: Fetching activities for prop ${propuestaId}`);
+        actividades.forEach((a: any) => {
+            console.log(`  - ID: ${a.id} | Titulo: ${a.nombre.substring(0, 10)} | Sem: ${a.semana} | Tipo: ${a.tipo}`);
+        });
+
+        // Lógica de "Lazy Creation" para ceros automáticos
+        const now = new Date();
+
+        // Iteramos las actividades para verificar fechas vencidas
+        for (let i = 0; i < actividades.length; i++) {
+            const actividad = actividades[i];
+
+            // Si tiene fecha de entrega, ya pasó, y NO tiene evidencias
+            if (actividad.fechaEntrega && new Date(actividad.fechaEntrega) < now && actividad.evidencias.length === 0) {
+                console.log(`Auto-assigning 0 for activity ${actividad.id} (expired)`);
+
+                try {
+                    // Crear evidencia con nota 0
+                    const nuevaEvidencia = await prisma.evidencia.create({
+                        data: {
+                            semana: actividad.semana || (i + 1), // Usar semana de la actividad o fallback al orden
+                            contenido: 'Asignación automática por falta de entrega (Plazo vencido).',
+                            archivoUrl: null,
+                            actividadId: actividad.id,
+                            estado: 'NO_ENTREGADO',
+                            calificacionTutor: 0,
+                            feedbackTutor: 'No se registró entrega en el plazo establecido.',
+                            fechaCalificacionTutor: now,
+                            estadoRevisionTutor: 'APROBADO', // Técnicamente aprobado el 0
+                            fechaEntrega: now
+                        }
+                    });
+
+                    // Actualizar el objeto en memoria para retornarlo actualizado
+                    actividad.evidencias.push(nuevaEvidencia as any);
+                    actividad.estado = 'NO_ENTREGADO'; // Asegurar estado en actividad
+
+                } catch (err) {
+                    console.error(`Error auto-assigning 0 for activity ${actividad.id}:`, err);
+                    // Continuamos, no bloqueamos el request
+                }
+            }
+        }
+
+        console.log(`DEBUG BACKEND [getActividadesByPropuesta]: Returning ${actividades.length} activities`);
+        if (actividades.length > 0) {
+            console.log("DEBUG BACKEND [getActividadesByPropuesta]: Sample Activity (First):", {
+                id: actividades[0].id,
+                nombre: actividades[0].nombre,
+                semana: (actividades[0] as any).semana
+            });
+        }
         return actividades;
     } catch (error) {
         request.log.error(error);
@@ -187,7 +237,7 @@ export const getActividadById = async (request: FastifyRequest, reply: FastifyRe
 export const updateActividad = async (request: FastifyRequest, reply: FastifyReply) => {
     const prisma = request.server.prisma;
     const { id } = request.params as any;
-    const { nombre, descripcion, estado, fechaEntrega } = request.body as any;
+    const { nombre, descripcion, estado, fechaEntrega, semana } = request.body as any;
 
     try {
         const actividadActualizada = await prisma.actividad.update({
@@ -196,6 +246,7 @@ export const updateActividad = async (request: FastifyRequest, reply: FastifyRep
                 nombre,
                 descripcion,
                 estado,
+                semana: semana ? Number(semana) : undefined,
                 fechaEntrega: fechaEntrega ? new Date(fechaEntrega) : undefined
             }
         });

@@ -48,6 +48,7 @@ export default async function (fastify: FastifyInstance, opts: any) {
             fecha_creacion: { type: 'string', format: 'date-time' },
             requisitos: { type: 'array', items: { type: 'string' } },
             estado: { type: 'string' },
+            semana: { type: 'integer' },
             evidencias: { type: 'array', items: { type: 'object', additionalProperties: true } },
             propuesta: { type: 'object', additionalProperties: true }
         }
@@ -90,7 +91,9 @@ export default async function (fastify: FastifyInstance, opts: any) {
                     nombre: { type: 'string' },
                     descripcion: { type: 'string' },
                     propuestaId: { type: 'integer' },
-                    tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] }
+                    semana: { type: 'integer' },
+                    tipo: { type: 'string', enum: ['DOCENCIA', 'TUTORIA'] },
+                    fechaEntrega: { type: 'string', format: 'date-time' }
                 }
             }
         },
@@ -155,7 +158,10 @@ export default async function (fastify: FastifyInstance, opts: any) {
                 type: 'object',
                 properties: {
                     nombre: { type: 'string' },
-                    descripcion: { type: 'string' }
+                    descripcion: { type: 'string' },
+                    semana: { type: 'integer' },
+                    fechaEntrega: { type: 'string', format: 'date-time' },
+                    estado: { type: 'string' }
                 }
             }
         },

@@ -167,3 +167,93 @@ export const updateTutorProfile = async (request: FastifyRequest, reply: Fastify
         return reply.code(500).send({ message: 'Error actualizando perfil del tutor' });
     }
 };
+
+export const getMisEstudiantesNotas = async (request: FastifyRequest, reply: FastifyReply) => {
+    const prisma = request.server.prisma;
+    const usuario = request.user as any;
+
+    try {
+        const propuestas = await prisma.propuesta.findMany({
+            where: {
+                trabajosTitulacion: {
+                    some: {
+                        fkTutorId: Number(usuario.id)
+                    }
+                }
+            },
+            include: {
+                estudiante: {
+                    select: {
+                        id: true,
+                        nombres: true,
+                        apellidos: true,
+                        cedula: true
+                    }
+                },
+                actividades: {
+                    include: {
+                        evidencias: {
+                            orderBy: { semana: 'asc' }
+                        }
+                    }
+                }
+            }
+        });
+
+        const estudiantesNotas = propuestas.map(p => {
+            // Inicializar array de 16 semanas con objetos { grade, evidenceId }
+            const notasSemanales: any[] = new Array(16).fill(null).map((_, i) => ({
+                week: i + 1,
+                grade: null,
+                evidenceId: null
+            }));
+
+            let suma = 0;
+            let count = 0;
+
+            p.actividades.forEach(act => {
+                act.evidencias.forEach(ev => {
+                    const semana = Number(ev.semana);
+                    if (semana >= 1 && semana <= 16) {
+                        const calif = ev.calificacionTutor ? Number(ev.calificacionTutor) : null;
+
+                        if (!notasSemanales[semana - 1].evidences) {
+                            notasSemanales[semana - 1].evidences = [];
+                        }
+
+                        notasSemanales[semana - 1].evidences.push({
+                            id: ev.id,
+                            grade: calif,
+                            activityName: act.nombre,
+                            tipo: act.tipo
+                        });
+
+                        // Fallback para UI actual
+                        notasSemanales[semana - 1].grade = notasSemanales[semana - 1].evidences[0].grade;
+                        notasSemanales[semana - 1].evidenceId = notasSemanales[semana - 1].evidences[0].id;
+
+                        if (calif !== null) {
+                            suma += calif;
+                            count++;
+                        }
+                    }
+                });
+            });
+
+            const promedio = count > 0 ? (suma / count).toFixed(2) : "0.00";
+
+            return {
+                studentId: p.estudiante.id,
+                studentName: `${p.estudiante.nombres} ${p.estudiante.apellidos}`,
+                cedula: p.estudiante.cedula,
+                notas: notasSemanales,
+                promedio: Number(promedio)
+            };
+        });
+
+        return estudiantesNotas;
+    } catch (error) {
+        request.log.error(error);
+        return reply.code(500).send({ message: 'Error recuperando notas de estudiantes' });
+    }
+};

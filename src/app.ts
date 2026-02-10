@@ -114,6 +114,8 @@ await app.register((await import('./routes/estudiantes/estudiante.routes.js')).d
 // @ts-ignore
 await app.register((await import('./routes/tutor/tutor.routes.js')).default, { prefix: '/api/v1/tutor' });
 // @ts-ignore
+await app.register((await import('./routes/docente/docente.routes.js')).default, { prefix: '/api/v1/docente' });
+// @ts-ignore
 await app.register((await import('./routes/areas/areaConocimiento.routes.js')).default, { prefix: '/api/v1/areas-conocimiento' });
 
 // Nuevas rutas

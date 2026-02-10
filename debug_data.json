@@ -1,0 +1,210 @@
+[
+  {
+    "id": 1,
+    "nombre": "nose",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-09T20:47:45.018Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 2,
+    "nombre": "semana 2",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-18T21:03:11.475Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 3,
+    "nombre": "semana 3",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-03T21:04:56.443Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 4,
+    "nombre": "cosas de la visa",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-07T21:17:30.910Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 6,
+    "nombre": "eeeeeeeeeeee",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-09T22:10:00.806Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 8,
+    "nombre": "mmmmmmmmmmmmmm",
+    "semana": null,
+    "tipo": "TUTORIA",
+    "fechaEntrega": "2026-02-19T22:17:35.826Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 9,
+    "nombre": "zzzzzzzzzzzzzz",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-18T22:23:01.241Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 10,
+    "nombre": "xxxxxxxxxxxxxxxxx",
+    "semana": null,
+    "tipo": "TUTORIA",
+    "fechaEntrega": "2026-02-18T22:23:24.857Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 11,
+    "nombre": "jjjjjjj",
+    "semana": null,
+    "tipo": "TUTORIA",
+    "fechaEntrega": "2026-02-20T22:47:39.735Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 12,
+    "nombre": "kkkkkkk",
+    "semana": null,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-20T22:47:55.021Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 13,
+    "nombre": "prueba de seman docenten",
+    "semana": 1,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-26T23:14:52.876Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 14,
+    "nombre": "semana 1",
+    "semana": 1,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-09T23:21:14.117Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 15,
+    "nombre": "tutor seman 1",
+    "semana": 1,
+    "tipo": "TUTORIA",
+    "fechaEntrega": "2026-02-09T23:21:48.503Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 16,
+    "nombre": "docente semana 7",
+    "semana": 7,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-19T23:26:16.078Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 17,
+    "nombre": "semana 3 docente",
+    "semana": 3,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-25T23:27:19.040Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 18,
+    "nombre": "semana 7 tutor",
+    "semana": 7,
+    "tipo": "TUTORIA",
+    "fechaEntrega": "2026-02-09T23:28:17.218Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 19,
+    "nombre": "ccccccc",
+    "semana": 3,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-24T23:36:56.991Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 20,
+    "nombre": "gngngngng",
+    "semana": 5,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-09T23:37:59.234Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 21,
+    "nombre": "nose",
+    "semana": 5,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-25T05:00:00.000Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 22,
+    "nombre": "cosas",
+    "semana": 5,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-28T23:46:16.868Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 23,
+    "nombre": "prueba 10",
+    "semana": 11,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-03-11T23:46:46.659Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 24,
+    "nombre": "prueba 11",
+    "semana": 11,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-28T23:50:35.823Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 25,
+    "nombre": "tercera prueba",
+    "semana": 3,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-10T00:00:45.317Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 26,
+    "nombre": "cuarta prueba",
+    "semana": 4,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-28T05:00:00.000Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 27,
+    "nombre": "cuarta pruebaas",
+    "semana": 4,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-10T00:03:05.191Z",
+    "propuestaId": 4
+  },
+  {
+    "id": 28,
+    "nombre": "quinta",
+    "semana": 5,
+    "tipo": "DOCENCIA",
+    "fechaEntrega": "2026-02-25T05:00:00.000Z",
+    "propuestaId": 4
+  }
+]

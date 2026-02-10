@@ -109,15 +109,18 @@ model TrabajoTitulacion {
 }
 
 model Actividad {
-  id              Int             @id @default(autoincrement())
-  nombre          String
-  descripcion     String?         @db.Text
-  propuestaId     Int             @map("propuesta_id")
-  tipo            TipoActividad   @default(DOCENCIA)
-  fechaAsignacion DateTime        @default(now()) @map("fecha_asignacion")
-  fechaActivacion DateTime?       @map("fecha_activacion")
-  fechaEntrega    DateTime?       @map("fecha_entrega")
-  requisitos      Json?
+  id          Int           @id @default(autoincrement())
+  nombre      String        @db.VarChar(191)
+  descripcion String?       @db.Text
+  propuestaId Int           @map("propuesta_id")
+  tipo        TipoActividad @default(DOCENCIA)
+
+  // Nuevos campos
+  fechaAsignacion DateTime        @default(now()) @map("fecha_asignacion") @db.DateTime(3)
+  fechaActivacion DateTime?       @map("fecha_activacion") @db.DateTime(3)
+  fechaEntrega    DateTime?       @map("fecha_entrega") @db.DateTime(3)
+  semana          Int?
+  requisitos      Json? // Array de strings con requisitos
   estado          EstadoActividad @default(NO_ENTREGADO)
   propuesta       Propuesta       @relation(fields: [propuestaId], references: [id])
   evidencias      Evidencia[]
